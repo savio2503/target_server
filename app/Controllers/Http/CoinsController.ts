@@ -11,7 +11,7 @@ export default class CoinsController {
         return response.ok(coins);
     }
 
-    public async storeCoin({ request, response, auth } : HttpContextContract) {
+    public async storeCoin({ request, response } : HttpContextContract) {
 
         const payload = await request.validate(CoinValidator);
 

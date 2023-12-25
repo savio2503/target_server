@@ -22,35 +22,12 @@ export default class TargetsController {
             target.totalDeposit = total;
 
             if (target.coinId != 1) {
-                let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
-
-                var res = await fetch(url)
-                .then(res => res.text())
-                .then(obj => JSON.parse(obj))
-                .catch(err => { throw err });
-
-                Logger.info(`-> ${res.USDBRL.bid}`)
-                var valorDolar = Number(res.USDBRL.bid)
-                var taxa = valorDolar * 0.02
-                var iof = (valorDolar + taxa) * 0.011
-                var dollarNomad = valorDolar + taxa + iof;
-                var depositEmDolar = (target.totalDeposit) / dollarNomad;
-                Logger.info(`valor total -> ${target.totalDeposit}
-                    , valorDolar -> ${valorDolar}
-                    , taxa -> ${taxa}
-                    , iof -> ${iof}
-                    , dollarNomad -> ${dollarNomad}
-                    , em dolar -> ${depositEmDolar}`)
-
-                target.porcetagem = ((depositEmDolar  * 100) / target.valor)
+                target.porcetagem = await this.getPorcetagemDolar(target.valor, target.totalDeposit)
             } else {
                 target.porcetagem = ((target.totalDeposit * 100) / target.valor)
             }
 
-
         }
-
-        //Logger.info(`${JSON.stringify(targets, null, 2)}`);
 
         return response.ok(targets);
     }
@@ -69,35 +46,39 @@ export default class TargetsController {
             target.totalDeposit = total;
 
             if (target.coinId != 1) {
-                let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
-
-                var res = await fetch(url)
-                .then(res => res.text())
-                .then(obj => JSON.parse(obj))
-                .catch(err => { throw err });
-
-                Logger.info(`-> ${res.USDBRL.bid}`)
-                var valorDolar = Number(res.USDBRL.bid)
-                var taxa = valorDolar * 0.02
-                var iof = (valorDolar + taxa) * 0.011
-                var dollarNomad = valorDolar + taxa + iof;
-                var depositEmDolar = (target.totalDeposit) / dollarNomad;
-                Logger.info(`valor total -> ${target.totalDeposit}
-                    , valorDolar -> ${valorDolar}
-                    , taxa -> ${taxa}
-                    , iof -> ${iof}
-                    , dollarNomad -> ${dollarNomad}
-                    , em dolar -> ${depositEmDolar}`)
-
-                target.porcetagem = ((depositEmDolar  * 100) / target.valor)
+                target.porcetagem = await this.getPorcetagemDolar(target.valor, target.totalDeposit)
             } else {
                 target.porcetagem = ((target.totalDeposit * 100) / target.valor)
             }
         }
 
-        //Logger.info(`${JSON.stringify(targets, null, 2)}`);
-
         return response.ok(targets);
+    }
+
+    private async getPorcetagemDolar(valorTotal: number, valorDepositado: number) {
+
+        let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
+
+        var res = await fetch(url)
+        .then(res => res.text())
+        .then(obj => JSON.parse(obj))
+        .catch(err => { throw err });
+
+        Logger.info(`-> ${res.USDBRL.bid}`)
+        var valorDolar = Number(res.USDBRL.bid)
+        var taxa = valorDolar * 0.02
+        var iof = (valorDolar + taxa) * 0.011
+        var dollarNomad = valorDolar + taxa + iof;
+        var depositEmDolar = (valorDepositado) / dollarNomad;
+
+        Logger.info(`valor total -> ${valorDepositado}
+            , valorDolar -> ${valorDolar}
+            , taxa -> ${taxa}
+            , iof -> ${iof}
+            , dollarNomad -> ${dollarNomad}
+            , em dolar -> ${depositEmDolar}`)
+
+        return ((depositEmDolar  * 100) / valorTotal)
     }
 
     public async store({ request, response, auth }: HttpContextContract) {
@@ -149,39 +130,24 @@ export default class TargetsController {
 
     public async destroy({ auth, response, params }: HttpContextContract) {
         try {
-
-            //
             var target = await Target.query().where('id', params.id)
 
             if (target.length < 1) {
                 return response.notFound();
             }
 
-            //Logger.info("delete 1 " + target);
-
             var total = await HistoricsController.getTotal(target[0])
-
-            //Logger.info("delete 2 " + total);
 
             await Deposit.query().where('target_id', target[0].id).delete();
 
-            //Logger.info("delete 2.5");
-
             await target[0].delete();
-
-            //Logger.info("delete 3");
 
             const userAuth = await auth.use('api').authenticate()
 
-            //Logger.info("delete 4");
-
             await HistoricsController.processDeposit(total, userAuth.id)
-
-            //Logger.info("delete 5");
 
             return response.ok(`target ${params.id} deleted successfully`);
         } catch (error) {
-            //Logger.info(`error on delete: ${error}`);
             return response.badRequest();
         }
     }

@@ -16,7 +16,6 @@ export default class HistoricsController {
             .where('user_id', userAuth.id)
             .orderBy('created_at', 'desc');
 
-
         Logger.info('historic: ' + historics.toString())
 
         return response.ok(historics)
@@ -128,7 +127,6 @@ export default class HistoricsController {
 
     public static async getTotal(target: Target) {
 
-        Logger.info("getTotal("+target.id+")")
         var somaDeposits = (await Database
             .query()
             .from('deposits')
@@ -136,7 +134,6 @@ export default class HistoricsController {
             .sum('valor', 'soma')).at(0).soma
 
         return somaDeposits as number
-
     }
 }
 
