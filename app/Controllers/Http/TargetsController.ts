@@ -17,9 +17,8 @@ export default class TargetsController {
 
         for await (const target of targets) {
 
-            var total = await HistoricsController.getTotal(target)
-
-            target.totalDeposit = total;
+            target.totalDeposit = Number(await HistoricsController.getTotal(target))
+            target.valor = Number(target.valor)
 
             if (target.coinId != 1) {
                 target.porcetagem = await this.getPorcetagemDolar(target.valor, target.totalDeposit)
@@ -41,9 +40,8 @@ export default class TargetsController {
 
         for await (const target of targets) {
 
-            var total = await HistoricsController.getTotal(target)
-
-            target.totalDeposit = total;
+            target.totalDeposit = Number(await HistoricsController.getTotal(target))
+            target.valor = Number(target.valor)
 
             if (target.coinId != 1) {
                 target.porcetagem = await this.getPorcetagemDolar(target.valor, target.totalDeposit)
