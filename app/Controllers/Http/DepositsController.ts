@@ -7,11 +7,16 @@ export default class DepositsController {
     public async get({ params, response }: HttpContextContract) {
         const idTarget = params.id;
 
-        const deposit = await Deposit.query()
+        const deposits = await Deposit.query()
             .where('target_id', idTarget)
             .orderBy('created_at', 'desc')
 
-        return response.ok(deposit);
+        for (const deposit of deposits) {
+
+            deposit.valor = Number(deposit.valor)
+        }
+
+        return response.ok(deposits);
     }
 
     public async getSum({ params, response}: HttpContextContract) {
