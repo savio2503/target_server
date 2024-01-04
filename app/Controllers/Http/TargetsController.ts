@@ -119,7 +119,8 @@ export default class TargetsController {
             descricao: payload.descricao,
             valor: payload.valor,
             posicao: payload.posicao,
-            coinId: payload.coin
+            coinId: payload.coin,
+            imagem: payload.imagem
         });
         await target.save();
 
