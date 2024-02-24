@@ -1,26 +1,30 @@
 import { DateTime } from 'luxon'
-import { BaseModel, HasOne, column, hasOne } from '@ioc:Adonis/Lucid/Orm'
-import Target from './Target'
+import { BaseModel, column, hasOne } from '@adonisjs/lucid/orm'
+import Target from './target.js'
 
 export default class Deposit extends BaseModel {
   @column({ isPrimary: true })
-  public id: number
+  declare id: number
 
   @column()
-  public targetId: number
+  declare targetId: number
 
   @column()
-  public valor: number
+  declare valor: number
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updatedAt: DateTime
 
   @hasOne(() => Target, {
     localKey: 'targetId',
     foreignKey: 'id',
   })
   public target: HasOne<typeof Target>
+
+  toString() {
+    return `Deposit=[id: ${this.id}, target: ${this.targetId}, valor: ${this.valor}]`
+  }
 }

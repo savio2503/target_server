@@ -1,12 +1,12 @@
-import { BaseModel, column } from '@ioc:Adonis/Lucid/Orm'
+import { BaseModel, column } from '@adonisjs/lucid/orm'
 
 export default class Coin extends BaseModel {
   @column({ isPrimary: true })
-  public id: number
-  
-  @column()
-  public name: string
+  declare id: number
 
   @column()
-  public symbol: string
+  declare name: string
+
+  @column()
+  declare symbol: string
 }

@@ -1,18 +1,38 @@
-import Route from '@ioc:Adonis/Core/Route'
+/*
+|--------------------------------------------------------------------------
+| Routes file
+|--------------------------------------------------------------------------
+|
+| The routes file is used for defining the HTTP routes.
+|
+*/
 
-Route.post('/login', 'AuthController.login')
+import AuthController from '#controllers/auth_controller'
+import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
+import TargetsController from '#controllers/targets_controller'
+import CoinsController from '#controllers/coins_controller'
+import HistoricsController from '#controllers/historics_controller'
+import DepositsController from '#controllers/deposits_controller'
 
-Route.group(() => {
-    Route.get("auth/me","AuthController.me");
-    Route.get('/all','TargetsController.all');
-    Route.get('/allAtive','TargetsController.allAtive');
-    Route.get('/target/:id','TargetsController.index')
-    Route.get('/image/:id','TargetsController.image')
-    Route.resource('/target','TargetsController').only(['store','update','destroy']);
-    Route.get('/historic','HistoricsController.get')
-    Route.post('/inside','HistoricsController.inside')
-    Route.get('/deposit/:id','DepositsController.get')
-    Route.get('/sumdeposit/:id','DepositsController.getSum')
-    Route.get('/allCoin','CoinsController.allCoin')
-    Route.post('/storeCoin','CoinsController.storeCoin')
-}).middleware("auth")
+router.get('/', async () => {
+  return {
+    hello: 'world',
+  }
+})
+
+router.post('/login',     [AuthController, 'login'])
+router.get('/allCoin',    [CoinsController, 'allCoin'])
+router.post('/storeCoin', [CoinsController, 'storeCoin'])
+
+router.group(() => {
+  router.resource('/target',TargetsController).only(['store','update','destroy'])
+  router.get('/all',            [TargetsController,   'all'])
+  router.get('/target/:id',     [TargetsController,   'index'])
+  router.get('/image/:id',      [TargetsController,   'image'])
+  router.get('auth/me',         [AuthController,      'me'])
+  router.get('/historic',       [HistoricsController, 'get'])
+  router.post('/inside',        [HistoricsController, 'inside'])
+  router.get('/deposit/:id',    [DepositsController,  'get'])
+  router.get('/sumdeposit/:id', [DepositsController,  'getSum'])
+}).use(middleware.auth())

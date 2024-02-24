@@ -1,22 +1,22 @@
 import { DateTime } from 'luxon'
-import { BaseModel, HasOne, column, hasOne } from '@ioc:Adonis/Lucid/Orm'
-import User from './User'
+import { BaseModel, column, hasOne } from '@adonisjs/lucid/orm'
+import User from './user.js'
 
 export default class Historic extends BaseModel {
   @column({ isPrimary: true })
-  public id: number
+  declare id: number
 
   @column()
-  public valor: number
+  declare valor: number
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updatedAt: DateTime
 
   @column()
-  public userId: number
+  declare userId: number
 
   @hasOne(() => User, {
     localKey: 'userId',

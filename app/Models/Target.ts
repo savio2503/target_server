@@ -1,59 +1,58 @@
 import { DateTime } from 'luxon'
-import { BaseModel, HasOne, column, hasOne } from '@ioc:Adonis/Lucid/Orm'
-import User from './User'
-import Coin from './Coin'
+import { BaseModel, column, hasOne } from '@adonisjs/lucid/orm'
+import Coin from './coin.js'
+import User from './user.js'
 
 export default class Target extends BaseModel {
   @column({ isPrimary: true })
-  public id: number
+  declare id: number
 
   @column()
-  public descricao: string
+  declare descricao: string
 
   @column()
-  public valor: number
+  declare valor: number
 
   @column()
-  public posicao: number
+  declare posicao: number
 
   @column()
-  public ativo: boolean
+  declare ativo: boolean
 
   @column()
-  public imagem: string
+  declare imagem: string
 
   @column.dateTime({ autoCreate: true })
-  public createdAt: DateTime
+  declare createdAt: DateTime
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })
-  public updatedAt: DateTime
+  declare updatedAt: DateTime
 
   @column()
-  public userId: number
+  declare userId: number
 
   @hasOne(() => User, {
     localKey: 'userId',
     foreignKey: 'id',
   })
-  public user: HasOne<typeof User>
+  declare user: HasOne<typeof User>
 
   @column()
-  public coinId: number
+  declare coinId: number
 
   @hasOne(() => Coin, {
     localKey: 'coinId',
     foreignKey: 'id',
   })
-  public coin: HasOne<typeof Coin>
+  declare coin: HasOne<typeof Coin>
 
   @column()
-  public totalDeposit: number
+  declare totalDeposit: number
 
   @column()
-  public porcetagem: number
+  declare porcetagem: number
 
   toString() {
     return `Target=[id: ${this.id}, descricao: ${this.descricao}, posicao: ${this.posicao}, ativo: ${this.ativo}, userId: ${this.userId}, coin: ${this.coin}, totalDeposit: ${this.totalDeposit}, porcetagem: ${this.porcetagem}]`
   }
- 
 }
