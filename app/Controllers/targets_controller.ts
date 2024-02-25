@@ -100,6 +100,51 @@ export default class TargetsController {
         })
     }
 
+    public async imageUpdate({response, request } : HttpContext) {
+        const image = request.input('image')
+        const targetId = request.input('targetId')
+
+        const target = await Target.firstOrFail(targetId)
+
+        if (image != null) {
+            
+            target.merge({
+                imagem: image
+            })
+
+            await target.save()
+            
+            return response.ok("OK")
+        } else {
+            response.notModified("o campo imagem nao esta preechido")
+        }
+    }
+
+    public async update({ request, response, params }: HttpContext ) {
+        
+        const data = request.all()
+        const payload = await createEditTargetValidator.validate(data)
+        const target = await Target.findOrFail(params.id);
+
+        target.merge({
+            descricao: payload.descricao,
+            valor: payload.valor,
+            posicao: payload.posicao,
+            coinId: payload.coin,
+            imagem: payload.imagem
+        });
+        await target.save();
+
+        return response.ok({
+            "id": target.id,
+            "descricao": target.descricao,
+            "valor": target.valor,
+            "posicao": target.posicao,
+            "coin": target.coinId,
+            "imagem": target.imagem 
+        })
+    }
+
     public async destroy({ auth, response, params }: HttpContext) {
         try {
             var target = await Target.query().where('id', params.id)
