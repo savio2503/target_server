@@ -13,9 +13,10 @@ export default class DepositsController {
 
         for (const deposit of deposits) {
             deposit.valor = Number(deposit.valor)
+            logger.info(`valor: ${deposit.valor}`)
         }
 
-        logger.info(`${deposits}`)
+        //logger.info(`${deposits}`)
 
         return response.ok(deposits);
     }

@@ -3,6 +3,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import HistoricsController from './historics_controller.js'
 import logger from '@adonisjs/core/services/logger';
 import { createEditTargetValidator } from '#validators/create_edit_target'
+import Deposit from '#models/deposit';
 
 export default class TargetsController {
 
@@ -26,6 +27,9 @@ export default class TargetsController {
             } else {
                 target.porcetagem = ((target.totalDeposit * 100) / target.valor)
             }
+
+            if (target.ativo)
+                logger.info(`target[${target.id}] = ${target.totalDeposit}, porc: ${target.porcetagem}`)
 
             result.push({
                 "id": target.id,
@@ -54,7 +58,7 @@ export default class TargetsController {
         .then(obj => JSON.parse(obj))
         .catch(err => { throw err });
 
-        logger.info(`-> ${res.USDBRL.bid}`)
+        //logger.info(`-> ${res.USDBRL.bid}`)
         var valorDolar = Number(res.USDBRL.bid)
         var taxa = valorDolar * 0.02
         var iof = (valorDolar + taxa) * 0.011
@@ -94,6 +98,30 @@ export default class TargetsController {
             "coin": target.coinId,
             "imagem": target.imagem 
         })
+    }
+
+    public async destroy({ auth, response, params }: HttpContext) {
+        try {
+            var target = await Target.query().where('id', params.id)
+
+            if (target.length < 1) {
+                return response.notFound();
+            }
+
+            var total = await HistoricsController.getTotal(target[0])
+
+            await Deposit.query().where('target_id', target[0].id).delete();
+
+            await target[0].delete();
+
+            const userAuth = await auth.getUserOrFail()
+
+            await HistoricsController.processDeposit(total, userAuth.id)
+
+            return response.ok(`target ${params.id} deleted successfully`);
+        } catch (error) {
+            return response.badRequest();
+        }
     }
 
     public async index({ response, params }: HttpContext) {

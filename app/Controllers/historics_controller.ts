@@ -104,7 +104,7 @@ export default class HistoricsController {
 
         var valor = payload.valor;
 
-        logger.info(`user: ${userAuth.id}, inside valor: ${valor}`)
+        //logger.info(`user: ${userAuth.id}, inside valor: ${valor}`)
 
         var somaPosicaoAtivo = (await db
             .from('targets')
@@ -112,7 +112,7 @@ export default class HistoricsController {
             .where('user_id',userAuth.id)
             .where('ativo', 1)).at(0).soma
 
-        logger.info(`soma das posicoes: ${somaPosicaoAtivo}`)
+        //logger.info(`soma das posicoes: ${somaPosicaoAtivo}`)
 
         if (somaPosicaoAtivo === null) {
             return response.methodNotAllowed('Não há targets salvos');
@@ -131,7 +131,7 @@ export default class HistoricsController {
 
     public static async getTotal(target: Target) {
 
-        logger.info("getTotal("+target.id+")")
+        //logger.info("getTotal("+target.id+")")
 
         var somaDeposits = (await db
             .from('deposits')
