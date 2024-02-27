@@ -104,9 +104,11 @@ export default class TargetsController {
         const image = request.input('image')
         const targetId = request.input('targetId')
 
-        const target = await Target.firstOrFail(targetId)
+        if (image != null && targetId != null) {
 
-        if (image != null) {
+            const target = await Target.findOrFail(targetId)
+    
+            logger.info(`idTargetParam: ${targetId}, target: ${target.toString()}`)
             
             target.merge({
                 imagem: image
@@ -116,7 +118,7 @@ export default class TargetsController {
             
             return response.ok("OK")
         } else {
-            response.notModified("o campo imagem nao esta preechido")
+            response.notModified("o campo imagem ou targetid nao esta preechido")
         }
     }
 

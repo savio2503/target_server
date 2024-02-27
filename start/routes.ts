@@ -30,7 +30,7 @@ router.group(() => {
   router.get('/all',            [TargetsController,   'all'])
   router.get('/target/:id',     [TargetsController,   'index'])
   router.get('/image/:id',      [TargetsController,   'image'])
-  router.post('/image',         [TargetsController,   'imageUpdate'])
+  router.put('/image',          [TargetsController,   'imageUpdate'])
   router.get('auth/me',         [AuthController,      'me'])
   router.get('/historic',       [HistoricsController, 'get'])
   router.post('/inside',        [HistoricsController, 'inside'])
