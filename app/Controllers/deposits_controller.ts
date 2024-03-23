@@ -12,10 +12,10 @@ export default class DepositsController {
 
             const deposits = await db
                 .from('deposits')
-                .select(db.rawQuery(`sum(valor) as valor, date_format(created_at, '%m/%Y') as mes`))
+                .select(db.rawQuery(`sum(valor) as valor, date_format(created_at, '%Y/%m') as mes`))
                 .where('target_id',idTarget)
-                .groupByRaw(`date_format(created_at, '%m/%Y')`)
-                .orderByRaw(`date_format(created_at, '%m/%Y') desc`)
+                .groupByRaw(`date_format(created_at, '%Y/%m')`)
+                .orderByRaw(`date_format(created_at, '%Y/%m') desc`)
 
 
             for (const deposit of deposits) {
