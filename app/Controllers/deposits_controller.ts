@@ -4,21 +4,31 @@ import logger from '@adonisjs/core/services/logger';
 import db from '@adonisjs/lucid/services/db'
 
 export default class DepositsController {
+
     public async get({ params, response }: HttpContext) {
         const idTarget = params.id;
+            
+        try {
 
-        const deposits = await Deposit.query()
-            .where('target_id', idTarget)
-            .orderBy('created_at', 'desc')
+            const deposits = await db
+                .from('deposits')
+                .select(db.rawQuery(`sum(valor) as valor, date_format(created_at, '%m/%Y') as mes`))
+                .where('target_id',idTarget)
+                .groupByRaw(`date_format(created_at, '%m/%Y')`)
+                .orderByRaw(`date_format(created_at, '%m/%Y') desc`)
 
-        for (const deposit of deposits) {
-            deposit.valor = Number(deposit.valor)
-            logger.info(`valor: ${deposit.valor}`)
+
+            for (const deposit of deposits) {
+                deposit.valor = Number(deposit.valor)
+                logger.info(`valor: ${deposit.valor}`)
+            }
+
+            //logger.info(`${deposits}`)
+
+            return response.ok(deposits);
+        } catch (error) {
+            return response.badGateway(`erro: ${error}`)
         }
-
-        //logger.info(`${deposits}`)
-
-        return response.ok(deposits);
     }
 
     public async getSum({ params, response}: HttpContext) {

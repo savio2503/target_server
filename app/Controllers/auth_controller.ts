@@ -13,7 +13,7 @@ export default class AuthController {
 
         await auth.use('web').login(user)
 
-        return response.ok("")
+        return response.ok({message: "logado com sucesso"})
     }
 
     public async me({ auth, response }: HttpContext) {
