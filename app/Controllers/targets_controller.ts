@@ -40,7 +40,8 @@ export default class TargetsController {
                 "coin": target.coinId,
                 "imagem": target.imagem,
                 "total": target.totalDeposit,
-                "porcetagem": target.porcetagem 
+                "porcetagem": target.porcetagem,
+                "removebackground": target.removebackground,
             })
         }
 
@@ -88,6 +89,7 @@ export default class TargetsController {
             posicao: payload.posicao,
             coinId: payload.coin,
             imagem: payload.imagem,
+            removebackground: payload.removebackground,
         })
 
         return response.ok({
@@ -96,7 +98,8 @@ export default class TargetsController {
             "valor": target.valor,
             "posicao": target.posicao,
             "coin": target.coinId,
-            "imagem": target.imagem 
+            "imagem": target.imagem,
+            "removebackground": target.removebackground,
         })
     }
 
@@ -133,7 +136,8 @@ export default class TargetsController {
             valor: payload.valor,
             posicao: payload.posicao,
             coinId: payload.coin,
-            imagem: payload.imagem
+            imagem: payload.imagem,
+            removebackground: payload.removebackground,
         });
         await target.save();
 
@@ -143,7 +147,8 @@ export default class TargetsController {
             "valor": target.valor,
             "posicao": target.posicao,
             "coin": target.coinId,
-            "imagem": target.imagem 
+            "imagem": target.imagem,
+            "removebackground": target.removebackground,
         })
     }
 

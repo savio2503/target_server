@@ -47,6 +47,9 @@ export default class Target extends BaseModel {
   declare coin: HasOne<typeof Coin>
 
   @column()
+  declare removebackground: number
+
+  @column()
   declare totalDeposit: number
 
   @column()
