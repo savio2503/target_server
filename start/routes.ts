@@ -22,6 +22,7 @@ router.get('/', async () => {
 })
 
 router.post('/login',     [AuthController, 'login'])
+router.post('/signin',     [AuthController, 'signin'])
 router.get('/allCoin',    [CoinsController, 'allCoin'])
 router.post('/storeCoin', [CoinsController, 'storeCoin'])
 

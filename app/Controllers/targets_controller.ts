@@ -15,7 +15,7 @@ export default class TargetsController {
         const targets = await Target.query()
             .where('user_id', user.id)
             .orderBy('posicao', 'desc')
-        var result = []    
+        var result = []
 
         for await (const target of targets) {
 
@@ -45,6 +45,13 @@ export default class TargetsController {
             })
         }
 
+        result.sort((a, b) => {
+            if (a.posicao === b.posicao) {
+                return b.porcetagem - a.porcetagem
+            }
+            return b.posicao - a.posicao
+        })
+
         //logger.info(`${JSON.stringify(result, null, 2)}`)
 
         return response.ok(result)
@@ -55,9 +62,9 @@ export default class TargetsController {
         let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
 
         var res = await fetch(url)
-        .then(res => res.text())
-        .then(obj => JSON.parse(obj))
-        .catch(err => { throw err });
+            .then(res => res.text())
+            .then(obj => JSON.parse(obj))
+            .catch(err => { throw err });
 
         //logger.info(`-> ${res.USDBRL.bid}`)
         var valorDolar = Number(res.USDBRL.bid)
@@ -73,60 +80,77 @@ export default class TargetsController {
             , dollarNomad -> ${dollarNomad}
             , em dolar -> ${depositEmDolar}`)*/
 
-        return ((depositEmDolar  * 100) / valorTotal)
+        return ((depositEmDolar * 100) / valorTotal)
     }
 
     public async store({ request, response, auth }: HttpContext) {
 
-        const data = request.all()
-        const payload = await createEditTargetValidator.validate(data)
-        const user = await auth.getUserOrFail();
 
-        const target = await Target.create({
-            userId: user.id,
-            descricao: payload.descricao,
-            valor: payload.valor,
-            posicao: payload.posicao,
-            coinId: payload.coin,
-            imagem: payload.imagem,
-            removebackground: payload.removebackground,
-        })
+        try {
+            logger.info(`start store`)
 
-        return response.ok({
-            "id": target.id,
-            "descricao": target.descricao,
-            "valor": target.valor,
-            "posicao": target.posicao,
-            "coin": target.coinId,
-            "imagem": target.imagem,
-            "removebackground": target.removebackground,
-        })
+            const data = request.all()
+            logger.info(`start 1 ${data}`)
+            const payload = await createEditTargetValidator.validate(data)
+            logger.info(`start 2`)
+            const user = await auth.getUserOrFail();
+
+            logger.info(`get user`)
+
+            const target = await Target.create({
+                userId: user.id,
+                descricao: payload.descricao,
+                valor: payload.valor,
+                posicao: payload.posicao,
+                coinId: payload.coin,
+                imagem: payload.imagem,
+                removebackground: payload.removebackground,
+            })
+
+            logger.info(`criou`)
+
+            return response.ok({
+                "id": target.id,
+                "descricao": target.descricao,
+                "valor": target.valor,
+                "posicao": target.posicao,
+                "coin": target.coinId,
+                "imagem": target.imagem,
+                "removebackground": target.removebackground,
+            })
+        } catch (error) {
+            logger.error(`Validation erro: ${error.message}`)
+            return response.status(502).send({
+                message: 'validation error',
+                error: error.message
+            })
+        }
     }
 
-    public async imageUpdate({response, request } : HttpContext) {
+    public async imageUpdate({ response, request }: HttpContext) {
         const image = request.input('image')
         const targetId = request.input('targetId')
 
         if (image != null && targetId != null) {
 
             const target = await Target.findOrFail(targetId)
-    
+
             logger.info(`idTargetParam: ${targetId}, target: ${target.toString()}`)
-            
+
             target.merge({
                 imagem: image
             })
 
             await target.save()
-            
+
             return response.ok("OK")
         } else {
             response.notModified("o campo imagem ou targetid nao esta preechido")
         }
     }
 
-    public async update({ request, response, params }: HttpContext ) {
-        
+    public async update({ request, response, params }: HttpContext) {
+
         const data = request.all()
         const payload = await createEditTargetValidator.validate(data)
         const target = await Target.findOrFail(params.id);
@@ -185,7 +209,7 @@ export default class TargetsController {
             "valor": target.valor,
             "posicao": target.posicao,
             "coin": target.coinId,
-            "imagem": target.imagem 
+            "imagem": target.imagem
         })
     }
 
@@ -194,7 +218,7 @@ export default class TargetsController {
         const target = await Target.findOrFail(params.id);
 
         return response.ok({
-            "imagem": target.imagem 
+            "imagem": target.imagem
         })
     }
 }
