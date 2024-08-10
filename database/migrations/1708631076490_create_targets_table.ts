@@ -14,6 +14,7 @@ export default class extends BaseSchema {
       table.boolean('ativo').notNullable().defaultTo(true)
       table.text('imagem','longtext').defaultTo(" ")
       table.integer('coin_id').unsigned().references('id').inTable('coins')
+      table.boolean('comprado').notNullable().defaultTo(false)
 
       table.timestamp('created_at')
       table.timestamp('updated_at')

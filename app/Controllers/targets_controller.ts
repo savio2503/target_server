@@ -42,6 +42,7 @@ export default class TargetsController {
                 "total": target.totalDeposit,
                 "porcetagem": target.porcetagem,
                 "removebackground": target.removebackground,
+                "comprado": target.comprado
             })
         }
 
@@ -173,6 +174,28 @@ export default class TargetsController {
             "coin": target.coinId,
             "imagem": target.imagem,
             "removebackground": target.removebackground,
+        })
+    }
+
+    public async comprar({ response, params}: HttpContext) {
+
+        const target = await Target.findOrFail(params.id)
+        const compradoparam = params.comprado
+
+        target.merge({
+            comprado: compradoparam
+        })
+        await target.save();
+
+        return response.ok({
+            "id": target.id,
+            "descricao": target.descricao,
+            "valor": target.valor,
+            "posicao": target.posicao,
+            "coin": target.coinId,
+            "imagem": target.imagem,
+            "removebackground": target.removebackground,
+            "comprado": target.comprado
         })
     }
 

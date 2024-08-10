@@ -28,6 +28,7 @@ router.post('/storeCoin', [CoinsController, 'storeCoin'])
 
 router.group(() => {
   router.resource('/target',TargetsController).only(['store','update','destroy'])
+  router.put('/comprar/:id/:comprado', [TargetsController, 'comprar'])
   router.get('/all',            [TargetsController,   'all'])
   router.get('/target/:id',     [TargetsController,   'index'])
   router.get('/image/:id',      [TargetsController,   'image'])
