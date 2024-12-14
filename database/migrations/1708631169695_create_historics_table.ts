@@ -4,17 +4,23 @@ export default class extends BaseSchema {
   protected tableName = 'historics'
 
   async up() {
-    this.schema.createTable(this.tableName, (table) => {
-      table.increments('id')
-      table.integer('user_id').unsigned().notNullable().references('id').inTable('users')
-      table.decimal('valor', 15,2).notNullable()
-      
-      table.timestamp('created_at')
-      table.timestamp('updated_at')
-    })
+    const hasTable = await this.schema.hasTable(this.tableName) // Verifica se a tabela já existe
+    if (!hasTable) {
+      this.schema.createTable(this.tableName, (table) => {
+        table.increments('id')
+        table.integer('user_id').unsigned().notNullable().references('id').inTable('users')
+        table.decimal('valor', 15, 2).notNullable()
+
+        table.timestamp('created_at')
+        table.timestamp('updated_at')
+      })
+    }
   }
 
   async down() {
-    this.schema.dropTable(this.tableName)
+    const hasTable = await this.schema.hasTable(this.tableName) // Verifica se a tabela existe antes de tentar apagá-la
+    if (hasTable) {
+      this.schema.dropTable(this.tableName)
+    }
   }
 }

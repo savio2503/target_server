@@ -19,9 +19,6 @@ export default class Target extends BaseModel {
   @column()
   declare ativo: boolean
 
-  @column()
-  declare imagem: string
-
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

@@ -4,12 +4,14 @@ import HistoricsController from './historics_controller.js'
 import logger from '@adonisjs/core/services/logger';
 import { createEditTargetValidator } from '#validators/create_edit_target'
 import Deposit from '#models/deposit';
+import { editImageValidator } from '#validators/image';
+import ImagemTarget from '#models/imagem_target';
 
 export default class TargetsController {
 
     public async all({ response, auth }: HttpContext) {
 
-        logger.info("target all")
+    //logger.info("target all")
 
         const user = await auth.getUserOrFail()
         const targets = await Target.query()
@@ -28,8 +30,8 @@ export default class TargetsController {
                 target.porcetagem = ((target.totalDeposit * 100) / target.valor)
             }
 
-            if (target.ativo)
-                logger.info(`target[${target.id}] = ${target.totalDeposit}, porc: ${target.porcetagem}`)
+            //if (target.ativo)
+            //    logger.info(`target[${target.id}] = ${target.totalDeposit}, porc: ${target.porcetagem}`)
 
             result.push({
                 "id": target.id,
@@ -38,7 +40,6 @@ export default class TargetsController {
                 "posicao": target.posicao,
                 "ativo": target.ativo,
                 "coin": target.coinId,
-                "imagem": target.imagem,
                 "total": target.totalDeposit,
                 "porcetagem": target.porcetagem,
                 "removebackground": target.removebackground,
@@ -88,15 +89,15 @@ export default class TargetsController {
 
 
         try {
-            logger.info(`start store`)
+            //logger.info(`start store`)
 
             const data = request.all()
-            logger.info(`start 1 ${data}`)
+            //logger.info(`start 1 ${data}`)
             const payload = await createEditTargetValidator.validate(data)
-            logger.info(`start 2`)
+            //logger.info(`start 2`)
             const user = await auth.getUserOrFail();
 
-            logger.info(`get user`)
+            //logger.info(`get user`)
 
             const target = await Target.create({
                 userId: user.id,
@@ -104,11 +105,23 @@ export default class TargetsController {
                 valor: payload.valor,
                 posicao: payload.posicao,
                 coinId: payload.coin,
-                imagem: payload.imagem,
+                //imagem: payload.imagem,
                 removebackground: payload.removebackground,
+                comprado: payload.comprado == 1
             })
 
-            logger.info(`criou`)
+            //logger.info(`criou o target = ${target.id}`)
+
+            if (payload.imagem != null) {
+                await ImagemTarget.create({
+                    idTarget: target.id,
+                    imagem: payload.imagem
+                })
+
+                //logger.info(`criou a imagem = ${imagem.id}`)
+            } /*else {
+                logger.info(`imagem nula`)
+            }*/
 
             return response.ok({
                 "id": target.id,
@@ -116,8 +129,9 @@ export default class TargetsController {
                 "valor": target.valor,
                 "posicao": target.posicao,
                 "coin": target.coinId,
-                "imagem": target.imagem,
+                //"imagem": target.imagem,
                 "removebackground": target.removebackground,
+                "comprado": target.comprado ? 1 : 0
             })
         } catch (error) {
             logger.error(`Validation erro: ${error.message}`)
@@ -128,9 +142,12 @@ export default class TargetsController {
         }
     }
 
-    public async imageUpdate({ response, request }: HttpContext) {
-        const image = request.input('image')
-        const targetId = request.input('targetId')
+    /*public async imageUpdate({ response, request }: HttpContext) {
+
+        const data = request.all()
+        const payload = await editImageValidator.validate(data)
+        const image = payload.imagem
+        const targetId = payload.targetId
 
         if (image != null && targetId != null) {
 
@@ -148,7 +165,7 @@ export default class TargetsController {
         } else {
             response.notModified("o campo imagem ou targetid nao esta preechido")
         }
-    }
+    }*/
 
     public async update({ request, response, params }: HttpContext) {
 
@@ -161,10 +178,28 @@ export default class TargetsController {
             valor: payload.valor,
             posicao: payload.posicao,
             coinId: payload.coin,
-            imagem: payload.imagem,
+            //imagem: payload.imagem,
             removebackground: payload.removebackground,
         });
         await target.save();
+
+        //logger.info(`update target = ${target.id}`)
+
+        if (payload.imagem != null) {
+
+            const imagem = await ImagemTarget.query()
+                .where('idTarget', target.id)
+                .firstOrFail()
+
+            imagem.merge({
+                imagem: payload.imagem
+            })
+            await imagem.save()
+
+            //logger.info(`update a imagem = ${imagem.id}`)
+        } /*else {
+            logger.info(`imagem nula update`)
+        }*/
 
         return response.ok({
             "id": target.id,
@@ -172,12 +207,12 @@ export default class TargetsController {
             "valor": target.valor,
             "posicao": target.posicao,
             "coin": target.coinId,
-            "imagem": target.imagem,
+            //"imagem": target.imagem,
             "removebackground": target.removebackground,
         })
     }
 
-    public async comprar({ response, params}: HttpContext) {
+    public async comprar({ response, params }: HttpContext) {
 
         const target = await Target.findOrFail(params.id)
         const compradoparam = params.comprado
@@ -193,7 +228,7 @@ export default class TargetsController {
             "valor": target.valor,
             "posicao": target.posicao,
             "coin": target.coinId,
-            "imagem": target.imagem,
+            //"imagem": target.imagem,
             "removebackground": target.removebackground,
             "comprado": target.comprado
         })
@@ -232,7 +267,7 @@ export default class TargetsController {
             "valor": target.valor,
             "posicao": target.posicao,
             "coin": target.coinId,
-            "imagem": target.imagem
+            //"imagem": target.imagem
         })
     }
 

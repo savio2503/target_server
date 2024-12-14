@@ -4,14 +4,20 @@ export default class extends BaseSchema {
   protected tableName = 'coins'
 
   async up() {
-    this.schema.createTable(this.tableName, (table) => {
-      table.increments('id').primary()
-      table.string('name')
-      table.string('symbol')
-    })
+    const hasTable = await this.schema.hasTable(this.tableName) // Verifica se a tabela já existe
+    if (!hasTable) {
+      this.schema.createTable(this.tableName, (table) => {
+        table.increments('id').primary()
+        table.string('name')
+        table.string('symbol')
+      })
+    }
   }
 
   async down() {
-    this.schema.dropTable(this.tableName)
+    const hasTable = await this.schema.hasTable(this.tableName) // Verifica se a tabela existe antes de tentar apagá-la
+    if (hasTable) {
+      this.schema.dropTable(this.tableName)
+    }
   }
 }
