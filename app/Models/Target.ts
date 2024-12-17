@@ -55,6 +55,9 @@ export default class Target extends BaseModel {
   @column()
   declare comprado: boolean
 
+  @column()
+  declare url: string | null | undefined
+
   toString() {
     return `Target=[id: ${this.id}, descricao: ${this.descricao}, posicao: ${this.posicao}, ativo: ${this.ativo}, userId: ${this.userId}, coin: ${this.coin}, totalDeposit: ${this.totalDeposit}, porcetagem: ${this.porcetagem}, comprado: ${this.comprado}]`
   }

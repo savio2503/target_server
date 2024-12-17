@@ -8,6 +8,7 @@ export const createEditTargetValidator = vine.compile(
         imagem: vine.string().nullable().optional(),
         coin: vine.number(),
         removebackground: vine.number(),
-        comprado: vine.number()
+        comprado: vine.number(),
+        url: vine.string().nullable().optional()
     })
 )

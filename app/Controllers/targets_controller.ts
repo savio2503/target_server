@@ -43,7 +43,8 @@ export default class TargetsController {
                 "total": target.totalDeposit,
                 "porcetagem": target.porcetagem,
                 "removebackground": target.removebackground,
-                "comprado": target.comprado
+                "comprado": target.comprado,
+                "url": target.url,
             })
         }
 
@@ -180,6 +181,7 @@ export default class TargetsController {
             coinId: payload.coin,
             //imagem: payload.imagem,
             removebackground: payload.removebackground,
+            url: payload.url ?? null,
         });
         await target.save();
 
