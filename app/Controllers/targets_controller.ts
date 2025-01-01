@@ -41,7 +41,7 @@ export default class TargetsController {
                 "ativo": target.ativo,
                 "coin": target.coinId,
                 "total": target.totalDeposit,
-                "porcetagem": target.porcetagem,
+                "porcentagem": target.porcetagem,
                 "removebackground": target.removebackground,
                 "comprado": target.comprado,
                 "url": target.url,
@@ -50,7 +50,7 @@ export default class TargetsController {
 
         result.sort((a, b) => {
             if (a.posicao === b.posicao) {
-                return b.porcetagem - a.porcetagem
+                return b.porcentagem - a.porcentagem
             }
             return b.posicao - a.posicao
         })
@@ -108,7 +108,8 @@ export default class TargetsController {
                 coinId: payload.coin,
                 //imagem: payload.imagem,
                 removebackground: payload.removebackground,
-                comprado: payload.comprado == 1
+                comprado: payload.comprado == 1,
+                url: payload.url
             })
 
             //logger.info(`criou o target = ${target.id}`)
@@ -132,7 +133,8 @@ export default class TargetsController {
                 "coin": target.coinId,
                 //"imagem": target.imagem,
                 "removebackground": target.removebackground,
-                "comprado": target.comprado ? 1 : 0
+                "comprado": target.comprado ? 1 : 0,
+                "url": target.url
             })
         } catch (error) {
             logger.error(`Validation erro: ${error.message}`)

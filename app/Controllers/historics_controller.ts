@@ -50,12 +50,24 @@ export default class HistoricsController {
 
     public static async processDeposit(valor: number, userId: number) {
 
-        var somaPosicaoAtivo = (await db
-            .query()
-            .from('targets')
-            .where('user_id', userId)
-            .where('ativo', '1')
-            .sum('posicao', 'soma')).at(0).soma
+        var somaPosicaoAtivo;
+        let positivovalor = valor >= 0
+
+        if (positivovalor) {
+            somaPosicaoAtivo = (await db
+                .query()
+                .from('targets')
+                .where('user_id', userId)
+                .where('ativo', '1')
+                .sum('posicao', 'soma')).at(0).soma
+        } else {
+            somaPosicaoAtivo = (await db
+                .query()
+                .from('targets')
+                .where('user_id', userId)
+                .where('comprado', '0')
+                .sum('posicao', 'soma')).at(0).soma
+        }
 
         somaPosicaoAtivo = parseInt(somaPosicaoAtivo)
 
@@ -66,9 +78,16 @@ export default class HistoricsController {
         while (true) {
             valorResto = 0.0
 
-            const targets = await Target.query()
-                .where('user_id', userId)
-                .where('ativo', '1')
+            var targets
+            if (positivovalor) {
+                targets = await Target.query()
+                    .where('user_id', userId)
+                    .where('ativo', '1')
+            } else {
+                targets = await Target.query()
+                    .where('user_id', userId)
+                    .where('comprado', '0')
+            }
 
             for await (const target of targets) {
 
@@ -109,7 +128,14 @@ export default class HistoricsController {
 
                             valorResto += diferenca
                         }
-                    }
+
+                        if (!positivovalor && !target.ativo) {
+                            logger.info(`voltando para ativo o target: ${target.id}`)
+
+                            target.ativo = true
+                            await target.save()
+                        }
+                    } 
                 } else {
                     logger.info(`dolar`)
                     var valorConvertido = target.valor * valorDolar
@@ -141,6 +167,13 @@ export default class HistoricsController {
                             await target.save()
 
                             valorResto += diferenca
+                        }
+
+                        if (!positivovalor && !target.ativo) {
+                            logger.info(`voltando para ativo o target: ${target.id}`)
+
+                            target.ativo = true
+                            await target.save()
                         }
                     }
                 }
