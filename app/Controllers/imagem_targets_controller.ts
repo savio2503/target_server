@@ -21,7 +21,7 @@ export default class ImagemTargetsController {
 
         const formattedImagem = {
             id: imagem.id,
-            updatedAt: imagem.updatedAt.toFormat('dd/MM/yyyy HH:mm'),
+            updatedAt: imagem.updatedAt.setZone('local').toFormat('dd/MM/yyyy HH:mm'),
         }
 
         return response.ok(formattedImagem)
