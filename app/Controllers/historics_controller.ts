@@ -18,7 +18,7 @@ export default class HistoricsController {
         const historics = await db.from('historics')
             .select(db.rawQuery(`valor as valor, date_format(created_at, '%d/%m/%Y') as mes`))
             .where('user_id', userAuth.id)
-            .orderByRaw(`date_format(created_at, '%d/%m/%Y') desc`)
+            .orderByRaw(`created_at desc`)
 
         for (const historic of historics) {
             historic.valor = Number(historic.valor)
@@ -75,6 +75,8 @@ export default class HistoricsController {
         var valorResto: number = 0.0;
         var valorDolar: number = await HistoricsController.getValorDolar();
 
+        logger.info(`total: ${valor}`)
+
         while (true) {
             valorResto = 0.0
 
@@ -95,12 +97,13 @@ export default class HistoricsController {
                 var aDepositar = ((pesoLocal / somaPosicaoAtivo) * valor)
 
                 var somaDep = (await this.getTotal(target));
-                logger.info(`a depositar ${aDepositar}`)
+                //logger.info(`a depositar ${aDepositar}`)
+                logger.info(`------------------------`)
 
                 if (target.coinId == 1) {
-                    logger.info(`real`)
+                    //logger.info(`real`)
                     if (somaDep == null) {
-                        logger.info(`if 1 ${aDepositar} / ${target.valor}`)
+                        //logger.info(`if 1 ${aDepositar} / ${target.valor}`)
                         if (aDepositar >= target.valor) {
                             logger.info(`if 2`)
                             var diferenca = aDepositar - target.valor
@@ -116,7 +119,7 @@ export default class HistoricsController {
                         }
                     } else {
                         var valorAposODeposito = Number(somaDep) + Number(aDepositar)
-                        logger.info(`if 3 ${valorAposODeposito} / ${target.valor}`)
+                        //logger.info(`if 3 ${valorAposODeposito} / ${target.valor}`)
 
                         if (valorAposODeposito >= target.valor) {
                             logger.info(`if 4`)
@@ -130,18 +133,18 @@ export default class HistoricsController {
                         }
 
                         if (!positivovalor && !target.ativo) {
-                            logger.info(`voltando para ativo o target: ${target.id}`)
-
+                            //logger.info(`voltando para ativo o target: ${target.id}`)
+                            logger.info(`if 5`)
                             target.ativo = true
                             await target.save()
                         }
                     } 
                 } else {
-                    logger.info(`dolar`)
+                    //logger.info(`dolar`)
                     var valorConvertido = target.valor * valorDolar
 
                     if (somaDep == null) {
-                        logger.info(`if 5 ${aDepositar} / ${valorConvertido}`)
+                        //logger.info(`if 5 ${aDepositar} / ${valorConvertido}`)
                         if (aDepositar >= valorConvertido) {
                             logger.info(`if 6`)
                             var diferenca = aDepositar - target.valor
@@ -157,7 +160,7 @@ export default class HistoricsController {
                         }
                     } else {
                         var valorAposODeposito = Number(somaDep) + Number(aDepositar)
-                        logger.info(`if 7 ${valorAposODeposito} / ${valorConvertido}`)
+                        //logger.info(`if 7 ${valorAposODeposito} / ${valorConvertido}`)
                         if (valorAposODeposito >= valorConvertido) {
                             logger.info(`if 8`)
                             var diferenca = valorAposODeposito - target.valor
@@ -170,14 +173,15 @@ export default class HistoricsController {
                         }
 
                         if (!positivovalor && !target.ativo) {
-                            logger.info(`voltando para ativo o target: ${target.id}`)
-
+                            //logger.info(`voltando para ativo o target: ${target.id}`)
+                            logger.info(`if 9`)
                             target.ativo = true
                             await target.save()
                         }
                     }
                 }
 
+                logger.info(`target ${target.descricao}: U$ ${aDepositar}`)
                 var deposit = await Deposit.create({
                     targetId: target.id,
                     valor: aDepositar
@@ -187,6 +191,7 @@ export default class HistoricsController {
 
                 resposta.push(deposit)
             }
+            logger.info(`------------------------`)
 
             if (valorResto <= 0.1) {
                 break;

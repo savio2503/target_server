@@ -43,4 +43,22 @@ export default class DepositsController {
 
         return response.ok(value)
     }
+
+    public async depositForTarget({ request, response }: HttpContext) {
+        const { id, valor } = request.only(['id','valor']);
+
+        try {
+            const newDeposit = await Deposit.create({
+                targetId: id,
+                valor: valor,
+            });
+
+            logger.info(`Novo depósito criado para target_id ${id} com valor ${valor}`);
+
+            return response.created(newDeposit);
+        } catch(error) {
+            logger.error(`Erro ao criar depósito: ${error}`);
+            return response.badGateway(`Erro ao criar depósito: ${error}`);
+        }
+    }
 }

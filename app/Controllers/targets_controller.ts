@@ -49,10 +49,11 @@ export default class TargetsController {
         }
 
         result.sort((a, b) => {
-            if (a.posicao === b.posicao) {
+            /*if (a.posicao === b.posicao) {
                 return b.porcentagem - a.porcentagem
             }
-            return b.posicao - a.posicao
+            return b.posicao - a.posicao*/
+            return b.porcentagem - a.porcentagem
         })
 
         //logger.info(`${JSON.stringify(result, null, 2)}`)
@@ -109,7 +110,7 @@ export default class TargetsController {
                 //imagem: payload.imagem,
                 removebackground: payload.removebackground,
                 comprado: payload.comprado == 1,
-                url: payload.url
+                url: payload.url,
             })
 
             //logger.info(`criou o target = ${target.id}`)
@@ -134,7 +135,7 @@ export default class TargetsController {
                 //"imagem": target.imagem,
                 "removebackground": target.removebackground,
                 "comprado": target.comprado ? 1 : 0,
-                "url": target.url
+                "url": target.url,
             })
         } catch (error) {
             logger.error(`Validation erro: ${error.message}`)
@@ -176,6 +177,12 @@ export default class TargetsController {
         const payload = await createEditTargetValidator.validate(data)
         const target = await Target.findOrFail(params.id);
 
+        var _ativo = target.ativo;
+
+        if (payload.ativo != null) {
+            _ativo = payload.ativo == 1;
+        }
+
         target.merge({
             descricao: payload.descricao,
             valor: payload.valor,
@@ -184,6 +191,7 @@ export default class TargetsController {
             //imagem: payload.imagem,
             removebackground: payload.removebackground,
             url: payload.url ?? null,
+            ativo: _ativo,
         });
         await target.save();
 
@@ -213,6 +221,7 @@ export default class TargetsController {
             "coin": target.coinId,
             //"imagem": target.imagem,
             "removebackground": target.removebackground,
+			"url": target.url,
         })
     }
 
@@ -275,12 +284,12 @@ export default class TargetsController {
         })
     }
 
-    public async image({ response, params }: HttpContext) {
+    /*public async image({ response, params }: HttpContext) {
 
         const target = await Target.findOrFail(params.id);
 
         return response.ok({
             "imagem": target.imagem
         })
-    }
+    }*/
 }

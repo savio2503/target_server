@@ -39,6 +39,7 @@ router.group(() => {
   router.post('/inside',        [HistoricsController, 'inside'])
   router.get('/deposit/:id',    [DepositsController,  'get'])
   router.get('/sumdeposit/:id', [DepositsController,  'getSum'])
+  router.post('/insideTarget',  [DepositsController,  'depositForTarget'])
 
   router.get('/imagens', [ImagemTargetsController, 'index']) // 1 - Pegar todas as imagens
 
