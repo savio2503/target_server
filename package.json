@@ -58,7 +58,8 @@
     "@vinejs/vine": "^1.7.1",
     "luxon": "^3.4.4",
     "mysql2": "^3.9.1",
-    "reflect-metadata": "^0.2.1"
+    "reflect-metadata": "^0.2.1",
+    "sharp": "^0.34.1"
   },
   "eslintConfig": {
     "extends": "@adonisjs/eslint-config/app"

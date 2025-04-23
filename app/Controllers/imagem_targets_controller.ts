@@ -1,5 +1,6 @@
 import ImagemTarget from '#models/imagem_target'
 import type { HttpContext } from '@adonisjs/core/http'
+import sharp from 'sharp'
 
 export default class ImagemTargetsController {
 
@@ -27,18 +28,48 @@ export default class ImagemTargetsController {
         return response.ok(formattedImagem)
     }
 
-    public async showImage({ params, response }: HttpContext) {
+    public async showImage({ params, request, response }: HttpContext) {
         const { idTarget } = params
-        const imagem = await ImagemTarget.query()
+        const tamMax = request.input('tamMax')
+
+        const imagemRecord = await ImagemTarget.query()
             .where('idTarget', idTarget)
             .select('imagem')
             .first()
 
-        if (!imagem) {
+        if (!imagemRecord) {
             return response.notFound({ message: 'Imagem não encontrada para o idTarget fornecido.' })
         }
 
-        return response.ok(imagem)
+        const imagemBase64 = imagemRecord.imagem
+
+        if (imagemBase64.toLowerCase().startsWith('http') || imagemBase64.startsWith(' ')) {
+            return response.ok({ imagem: imagemBase64 })
+        }
+
+        if (!tamMax) {
+            return response.ok({ imagem: imagemBase64 })
+        }
+
+        try {
+
+            const buffer = Buffer.from(imagemBase64, 'base64')
+            const imagemRedimensionada = await sharp(buffer)
+            .resize({
+                width: parseInt(tamMax),
+                height: parseInt(tamMax),
+                fit: 'inside',
+                withoutEnlargement: true
+            })
+            .toBuffer()
+
+            const imagemRedimensionadaBase64 = imagemRedimensionada.toString('base64')
+            return response.ok({ imagem: imagemRedimensionadaBase64 })
+
+        } catch(error) {
+            console.error('Error ao redimensionar imagem: ', error)
+            return response.status(500).send({message: 'Erro ao processar a imagem.'})
+        }
     }
 
     public async update({ params, request, response }: HttpContext) {
