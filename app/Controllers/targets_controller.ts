@@ -6,6 +6,7 @@ import { createEditTargetValidator } from '#validators/create_edit_target'
 import Deposit from '#models/deposit';
 import { editImageValidator } from '#validators/image';
 import ImagemTarget from '#models/imagem_target';
+import ImageConverter from '../helpers/ImageConverter.js';
 
 export default class TargetsController {
 
@@ -116,9 +117,21 @@ export default class TargetsController {
             //logger.info(`criou o target = ${target.id}`)
 
             if (payload.imagem != null) {
+
+                var imagemBase64 = payload.imagem
+
+                if (payload.imagem && ImageConverter.isURL(payload.imagem)) {
+                    try {
+                        imagemBase64 = await ImageConverter.convertUrlToBase64(payload.imagem);
+                    } catch (error) {
+                        logger.info(`erro ao baixar a imagem base64 ${error}`);
+                        imagemBase64 = payload.imagem
+                    }
+                }
+
                 await ImagemTarget.create({
                     idTarget: target.id,
-                    imagem: payload.imagem
+                    imagem: imagemBase64
                 })
 
                 //logger.info(`criou a imagem = ${imagem.id}`)
@@ -145,31 +158,6 @@ export default class TargetsController {
             })
         }
     }
-
-    /*public async imageUpdate({ response, request }: HttpContext) {
-
-        const data = request.all()
-        const payload = await editImageValidator.validate(data)
-        const image = payload.imagem
-        const targetId = payload.targetId
-
-        if (image != null && targetId != null) {
-
-            const target = await Target.findOrFail(targetId)
-
-            logger.info(`idTargetParam: ${targetId}, target: ${target.toString()}`)
-
-            target.merge({
-                imagem: image
-            })
-
-            await target.save()
-
-            return response.ok("OK")
-        } else {
-            response.notModified("o campo imagem ou targetid nao esta preechido")
-        }
-    }*/
 
     public async update({ request, response, params }: HttpContext) {
 
@@ -201,12 +189,33 @@ export default class TargetsController {
 
             const imagem = await ImagemTarget.query()
                 .where('idTarget', target.id)
-                .firstOrFail()
+                .first()
 
-            imagem.merge({
-                imagem: payload.imagem
-            })
-            await imagem.save()
+            var imagemBase64 = payload.imagem
+
+            if (payload.imagem && ImageConverter.isURL(payload.imagem)) {
+                try {
+                    imagemBase64 = await ImageConverter.convertUrlToBase64(payload.imagem);
+                } catch (error) {
+                    logger.info(`erro ao baixar a imagem base64 ${error}`);
+                    imagemBase64 = payload.imagem
+                }
+            }
+
+            if (imagem != null) {
+
+                imagem.merge({
+                    imagem: imagemBase64
+                })
+                await imagem.save()
+            } else {
+
+                await ImagemTarget.create({
+                    idTarget: target.id,
+                    imagem: imagemBase64
+                })
+
+            }
 
             //logger.info(`update a imagem = ${imagem.id}`)
         } /*else {

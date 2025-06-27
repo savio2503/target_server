@@ -19,6 +19,15 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare password: string
 
+  @column()
+  declare name: string
+
+  @column()
+  declare avatarUrl: string
+
+  @column()
+  declare googleUid: string
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

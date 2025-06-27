@@ -17,6 +17,28 @@ export default class AuthController {
         return response.ok({message: "logado com sucesso"})
     }
 
+    public async loginWithGoogle({auth, request, response} : HttpContext) {
+
+        const { email, name, photo, uid } = request.only(['email', 'name', 'photo', 'uid'])
+
+        let user = await User.findBy('email', email)
+
+        if (!user) {
+            user = await User.create({
+                email: email,
+                name: name,
+                avatarUrl: photo,
+                googleUid: uid,
+                password: Math.random().toString(36).slice(-8)
+            })
+        }
+
+        await auth.use('web').login(user)
+
+        return response.ok({message: "logado com sucesso"})
+
+    }
+
     public async signin({request, response}: HttpContext) {
 
         const data = request.all()

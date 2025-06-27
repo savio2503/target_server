@@ -27,7 +27,7 @@ const bodyParserConfig = defineConfig({
       'application/vnd.api+json',
       'application/csp-report',
     ],
-    limit: '20mb', // ou mais, dependendo do tamanho esperado
+    limit: '20mb',
   },
 
   /**

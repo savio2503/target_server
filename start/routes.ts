@@ -27,6 +27,8 @@ router.post('/signin',     [AuthController, 'signin'])
 router.get('/allCoin',    [CoinsController, 'allCoin'])
 router.post('/storeCoin', [CoinsController, 'storeCoin'])
 
+router.post('auth/google', [AuthController, 'loginWithGoogle'])
+
 router.group(() => {
   router.resource('/target',TargetsController).only(['store','update','destroy'])
   router.put('/comprar/:id/:comprado', [TargetsController, 'comprar'])
