@@ -14,7 +14,11 @@ export default class AuthController {
 
         await auth.use('web').login(user)
 
-        return response.ok({message: "logado com sucesso"})
+        return response.ok({
+            message: "logado com sucesso",
+            name: user.name,
+            image: user.avatarUrl
+        })
     }
 
     public async loginWithGoogle({auth, request, response} : HttpContext) {
