@@ -5,6 +5,8 @@ import { historicValidator } from '#validators/historic';
 import logger from '@adonisjs/core/services/logger';
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import Lastupdate from '#models/lastupdate';
+import { DateTime } from 'luxon';
 
 export default class HistoricsController {
     public async get({ auth, response }: HttpContext) {
@@ -233,6 +235,12 @@ export default class HistoricsController {
         var resposta = await HistoricsController.processDeposit(valor, userAuth.id)
 
         await this.saveDeposit(valor, userAuth.id);
+        
+        await Lastupdate.create({
+            table: 'targets',
+            action: 'all',
+            dateUpdate: DateTime.now(),
+        })
 
         return response.ok(resposta)
     }

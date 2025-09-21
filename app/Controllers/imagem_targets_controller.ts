@@ -1,5 +1,8 @@
 import ImagemTarget from '#models/imagem_target'
+import Lastupdate from '#models/lastupdate'
+import Target from '#models/target'
 import type { HttpContext } from '@adonisjs/core/http'
+import { DateTime } from 'luxon'
 import sharp from 'sharp'
 
 export default class ImagemTargetsController {
@@ -78,12 +81,22 @@ export default class ImagemTargetsController {
 
         const targetImagem = await ImagemTarget.findBy('idTarget', idTarget)
 
+        const target = await Target.findBy('id', idTarget)
+
         if (!targetImagem) {
             return response.notFound({ message: 'Imagem não encontrada para o idTarget fornecido.' })
         }
 
         targetImagem.imagem = imagem
         await targetImagem.save()
+        
+        await Lastupdate.create({
+            table: 'targets',
+            action: 'remove',
+            detail: idTarget.toString(),
+            dateUpdate: DateTime.now(),
+            user: target?.userId
+        })
 
         return response.ok({ message: 'Imagem atualizada com sucesso.', data: targetImagem })
     }

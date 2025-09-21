@@ -10,7 +10,7 @@ export default class CoinsController {
         return response.ok(coins);
     }
 
-    public async storeCoin({ request, response, auth } : HttpContext) {
+    public async storeCoin({ request, response } : HttpContext) {
 
         const data = request.all()
         const payload = await coinValidator.validate(data)

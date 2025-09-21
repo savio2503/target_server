@@ -4,13 +4,16 @@ import HistoricsController from './historics_controller.js'
 import logger from '@adonisjs/core/services/logger';
 import { createEditTargetValidator } from '#validators/create_edit_target'
 import Deposit from '#models/deposit';
-import { editImageValidator } from '#validators/image';
+//import { editImageValidator } from '#validators/image';
 import ImagemTarget from '#models/imagem_target';
 import ImageConverter from '../helpers/ImageConverter.js';
+import { Database } from '@adonisjs/lucid/database';
+import Lastupdate from '#models/lastupdate';
+import { DateTime } from 'luxon';
 
 export default class TargetsController {
 
-    public async all({ response, auth }: HttpContext) {
+    public async all({ response, auth, params }: HttpContext) {
 
     //logger.info("target all")
 
@@ -19,6 +22,14 @@ export default class TargetsController {
             .where('user_id', user.id)
             .orderBy('posicao', 'desc')
         var result = []
+        var order = params.order
+
+        logger.info(`all target order: ${order}`)
+
+        if (order == null) {
+            order = 1
+            logger.info(`all target order nulo: ${order}`)
+        }
 
         for await (const target of targets) {
 
@@ -49,13 +60,22 @@ export default class TargetsController {
             })
         }
 
-        result.sort((a, b) => {
-            /*if (a.posicao === b.posicao) {
+        //order == percetagem
+        if (order == 0) {
+            result.sort((a, b) => {
                 return b.porcentagem - a.porcentagem
-            }
-            return b.posicao - a.posicao*/
-            return b.porcentagem - a.porcentagem
-        })
+            })
+        } else if (order == 1) {
+            result.sort((a,b) => a.descricao.localeCompare(b.descricao, 'pt-BR', {sensitivity: "base"}))
+        } else if (order == 2) {
+            result.sort((a, b) => {
+                if (a.posicao == b.posicao) {
+                    return b.porcentagem - a.porcentagem
+                } else {
+                    return b.posicao - a.posicao
+                }
+            })
+        } 
 
         //logger.info(`${JSON.stringify(result, null, 2)}`)
 
@@ -64,7 +84,7 @@ export default class TargetsController {
 
     private async getPorcetagemDolar(valorTotal: number, valorDepositado: number) {
 
-        let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
+        /*let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
 
         var res = await fetch(url)
             .then(res => res.text())
@@ -72,7 +92,8 @@ export default class TargetsController {
             .catch(err => { throw err });
 
         //logger.info(`-> ${res.USDBRL.bid}`)
-        var valorDolar = Number(res.USDBRL.bid)
+        var valorDolar = Number(res.USDBRL.bid)*/
+        var valorDolar = 5.52
         var taxa = valorDolar * 0.02
         var iof = (valorDolar + taxa) * 0.011
         var dollarNomad = valorDolar + taxa + iof;
@@ -135,9 +156,16 @@ export default class TargetsController {
                 })
 
                 //logger.info(`criou a imagem = ${imagem.id}`)
-            } /*else {
-                logger.info(`imagem nula`)
-            }*/
+            } 
+
+            await Lastupdate.create({
+                table: 'targets',
+                action: 'create',
+                detail: target.id.toString(),
+                dateUpdate: DateTime.now(),
+                user: user.id
+            })
+
 
             return response.ok({
                 "id": target.id,
@@ -222,6 +250,14 @@ export default class TargetsController {
             logger.info(`imagem nula update`)
         }*/
 
+        await Lastupdate.create({
+            table: 'targets',
+            action: 'update',
+            detail: target.id.toString(),
+            dateUpdate: DateTime.now(),
+            user: target.userId
+        })
+
         return response.ok({
             "id": target.id,
             "descricao": target.descricao,
@@ -244,6 +280,14 @@ export default class TargetsController {
         })
         await target.save();
 
+        await Lastupdate.create({
+            table: 'targets',
+            action: 'all',
+            detail: target.id.toString(),
+            dateUpdate: DateTime.now(),
+            user: target.userId
+        })
+
         return response.ok({
             "id": target.id,
             "descricao": target.descricao,
@@ -260,6 +304,8 @@ export default class TargetsController {
         try {
             var target = await Target.query().where('id', params.id)
 
+            var userid = target[0].userId
+
             if (target.length < 1) {
                 return response.notFound();
             }
@@ -273,6 +319,14 @@ export default class TargetsController {
             const userAuth = await auth.getUserOrFail()
 
             await HistoricsController.processDeposit(total, userAuth.id)
+
+            await Lastupdate.create({
+                table: 'targets',
+                action: 'all',
+                detail: params.id.toString(),
+                dateUpdate: DateTime.now(),
+                user: userid
+            })
 
             return response.ok(`target ${params.id} deleted successfully`);
         } catch (error) {

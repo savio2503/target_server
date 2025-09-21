@@ -15,6 +15,7 @@ import CoinsController from '#controllers/coins_controller'
 import HistoricsController from '#controllers/historics_controller'
 import DepositsController from '#controllers/deposits_controller'
 import ImagemTargetsController from '#controllers/imagem_targets_controller'
+import LastUpdatesController from '#controllers/lastupdates_controller'
 
 router.get('/', async () => {
   return {
@@ -32,10 +33,10 @@ router.post('auth/google', [AuthController, 'loginWithGoogle'])
 router.group(() => {
   router.resource('/target',TargetsController).only(['store','update','destroy'])
   router.put('/comprar/:id/:comprado', [TargetsController, 'comprar'])
-  router.get('/all',            [TargetsController,   'all'])
+  router.get('/all/:order',            [TargetsController,   'all'])
   router.get('/target/:id',     [TargetsController,   'index'])
-  router.get('/image/:id',      [TargetsController,   'image'])
-  router.put('/image',          [TargetsController,   'imageUpdate'])
+  //router.get('/image/:id',      [TargetsController,   'image'])
+  //router.put('/image',          [TargetsController,   'imageUpdate'])
   router.get('auth/me',         [AuthController,      'me'])
   router.get('/historic',       [HistoricsController, 'get'])
   router.post('/inside',        [HistoricsController, 'inside'])
@@ -49,4 +50,6 @@ router.group(() => {
   router.get('/imagens/:idTarget/image', [ImagemTargetsController, 'showImage'])     // 2.2 - Apenas imagem
 
   router.put('/imagens/:idTarget', [ImagemTargetsController, 'update']) // 3 - Atualizar imagem
+
+  router.get('/lastupdates/:date', [LastUpdatesController, 'listAfterDate'])
 }).use(middleware.auth())
