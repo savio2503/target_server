@@ -245,6 +245,14 @@ export default class TargetsController {
 
             }
 
+            await Lastupdate.create({
+                        table: 'imagem',
+                        action: 'update',
+                        detail: target.id.toString(),
+                        dateUpdate: DateTime.now(),
+                        user: target?.userId
+                    })
+
             //logger.info(`update a imagem = ${imagem.id}`)
         } /*else {
             logger.info(`imagem nula update`)
@@ -337,13 +345,27 @@ export default class TargetsController {
     public async index({ response, params }: HttpContext) {
         const target = await Target.findOrFail(params.id)
 
+        target.totalDeposit = Number(await HistoricsController.getTotal(target))
+        target.valor = Number(target.valor)
+
+        if (target.coinId != 1) {
+            target.porcetagem = await this.getPorcetagemDolar(target.valor, target.totalDeposit)
+        } else {
+            target.porcetagem = ((target.totalDeposit * 100) / target.valor)
+        }
+
         return response.ok({
             "id": target.id,
             "descricao": target.descricao,
             "valor": target.valor,
             "posicao": target.posicao,
+            "ativo": target.ativo,
             "coin": target.coinId,
-            //"imagem": target.imagem
+            "total": target.totalDeposit,
+            "porcentagem": target.porcetagem,
+            "removebackground": target.removebackground,
+            "comprado": target.comprado,
+            "url": target.url
         })
     }
 

@@ -91,8 +91,8 @@ export default class ImagemTargetsController {
         await targetImagem.save()
         
         await Lastupdate.create({
-            table: 'targets',
-            action: 'remove',
+            table: 'imagem',
+            action: 'update',
             detail: idTarget.toString(),
             dateUpdate: DateTime.now(),
             user: target?.userId

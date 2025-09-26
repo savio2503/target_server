@@ -1,5 +1,6 @@
+import logger from '@adonisjs/core/services/logger'
 import Lastupdate from "#models/lastupdate";
-import { HttpContext } from "@adonisjs/core/http";
+import { HttpContext } from "@adonisjs/core/http"
 import { DateTime } from "luxon";
 
 export default class LastUpdatesController {
@@ -10,7 +11,9 @@ export default class LastUpdatesController {
 
         const dateParam = params.date
 
-        const parsedDate = DateTime.fromFormat(dateParam, 'yyyy-MM-ddHH:mm:ss')
+        const parsedDate = DateTime.fromFormat(dateParam, 'yyyy-MM-ddHH:mm:ss').plus({ hours: 3 })
+
+        logger.info(`listAfterDate: ${dateParam}`)
 
         if (!parsedDate.isValid) {
             return response.badRequest({
