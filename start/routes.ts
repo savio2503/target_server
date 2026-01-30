@@ -32,7 +32,7 @@ router.post('auth/google', [AuthController, 'loginWithGoogle'])
 
 router.group(() => {
   router.resource('/target',TargetsController).only(['store','update','destroy'])
-  router.put('/comprar/:id/:comprado', [TargetsController, 'comprar'])
+  router.put('/comprar/:id/:comprado/:valorCompra', [TargetsController, 'comprar'])
   router.get('/all/:order',            [TargetsController,   'all'])
   router.get('/target/:id',     [TargetsController,   'index'])
   //router.get('/image/:id',      [TargetsController,   'image'])

@@ -7,9 +7,10 @@ import Deposit from '#models/deposit';
 //import { editImageValidator } from '#validators/image';
 import ImagemTarget from '#models/imagem_target';
 import ImageConverter from '../helpers/ImageConverter.js';
-import { Database } from '@adonisjs/lucid/database';
+import db from '@adonisjs/lucid/services/db'
 import Lastupdate from '#models/lastupdate';
 import { DateTime } from 'luxon';
+import Historic from '#models/historic';
 
 export default class TargetsController {
 
@@ -133,6 +134,7 @@ export default class TargetsController {
                 removebackground: payload.removebackground,
                 comprado: payload.comprado == 1,
                 url: payload.url,
+                ativo: payload.ativo == 1
             })
 
             //logger.info(`criou o target = ${target.id}`)
@@ -177,6 +179,7 @@ export default class TargetsController {
                 "removebackground": target.removebackground,
                 "comprado": target.comprado ? 1 : 0,
                 "url": target.url,
+                "ativo": target.ativo ? 1 : 0
             })
         } catch (error) {
             logger.error(`Validation erro: ${error.message}`)
@@ -278,15 +281,84 @@ export default class TargetsController {
         })
     }
 
-    public async comprar({ response, params }: HttpContext) {
+    public async comprar({ auth, response, params }: HttpContext) {
 
         const target = await Target.findOrFail(params.id)
         const compradoparam = params.comprado
+        const valorCompra = params.valorCompra
 
-        target.merge({
-            comprado: compradoparam
-        })
-        await target.save();
+        if (valorCompra != null && valorCompra > 0) {
+
+            const userAuth = await auth.getUserOrFail()
+
+            //modificando o target
+            target.merge({
+                valor: valorCompra,
+                comprado: compradoparam,
+                ativo: false
+            })
+
+            await target.save();
+
+            //retirando ou adicionando o valor do historico
+
+            let totalDeposit = Number(await HistoricsController.getTotal(target))
+            let diffToTarget = valorCompra - totalDeposit
+            let diffToOuthers = -1 * diffToTarget
+
+            logger.info(`target.id: ${target.id}, valorCompra: ${valorCompra}, totalDeposit: ${totalDeposit}, diffToTarget: ${diffToTarget}, diffToOuthers: ${diffToOuthers}`)
+
+            await Deposit.create({
+                    targetId: target.id,
+                    valor: diffToTarget
+                });
+            //fim historico
+
+            var valor = diffToOuthers;
+
+            logger.info(`user: ${userAuth.id}, inside valor: ${valor}`)
+
+            var somaPosicaoAtivo = (await db
+                .from('targets')
+                .sum('posicao as soma')
+                .where('user_id', userAuth.id)
+                .where('ativo', 1)).at(0).soma
+
+            logger.info(`soma das posicoes: ${somaPosicaoAtivo}`)
+
+            if (somaPosicaoAtivo === null) {
+                return response.methodNotAllowed('Não há targets salvos');
+            }
+
+            somaPosicaoAtivo = parseInt(somaPosicaoAtivo)
+
+            if (somaPosicaoAtivo === 0) {
+                return response.methodNotAllowed('Os targets não estão classificados');
+            }
+
+            await HistoricsController.processDeposit(valor, userAuth.id)
+
+            logger.info('saveDeposit: ' + valor + ', user: ' + userAuth.id)
+
+            await Historic.create({
+                valor: valor,
+                userId: userAuth.id
+            });
+            
+            await Lastupdate.create({
+                table: 'targets',
+                action: 'all',
+                dateUpdate: DateTime.now(),
+            })
+
+        } else {
+            target.merge({
+                comprado: compradoparam,
+                ativo: false
+            })
+
+            await target.save();
+        }
 
         await Lastupdate.create({
             table: 'targets',
