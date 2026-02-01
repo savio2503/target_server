@@ -68,6 +68,7 @@ export default class HistoricsController {
                 .from('targets')
                 .where('user_id', userId)
                 .where('comprado', '0')
+                .where('ativo', '1')
                 .sum('posicao', 'soma')).at(0).soma
         }
 
@@ -91,6 +92,7 @@ export default class HistoricsController {
                 targets = await Target.query()
                     .where('user_id', userId)
                     .where('comprado', '0')
+                    .where('ativo', '1')
             }
 
             for await (const target of targets) {
