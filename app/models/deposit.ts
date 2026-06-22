@@ -23,7 +23,7 @@ export default class Deposit extends BaseModel {
     localKey: 'targetId',
     foreignKey: 'id',
   })
-  public target: HasOne<typeof Target>
+  declare target: HasOne<typeof Target>
 
   toString() {
     return `Deposit=[id: ${this.id}, target: ${this.targetId}, valor: ${this.valor}]`

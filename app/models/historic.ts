@@ -23,5 +23,5 @@ export default class Historic extends BaseModel {
     localKey: 'userId',
     foreignKey: 'id',
   })
-  public user: HasOne<typeof User>
+  declare user: HasOne<typeof User>
 }
