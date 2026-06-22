@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, hasOne } from '@adonisjs/lucid/orm'
+import type { HasOne } from '@adonisjs/lucid/types/relations' 
 import User from './user.js'
 
 export default class Historic extends BaseModel {
