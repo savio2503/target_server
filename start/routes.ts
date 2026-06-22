@@ -52,4 +52,6 @@ router.group(() => {
   router.put('/imagens/:idTarget', [ImagemTargetsController, 'update']) // 3 - Atualizar imagem
 
   router.get('/lastupdates/:date', [LastUpdatesController, 'listAfterDate'])
+
+  router.get('/reset/:id', [DepositsController, 'reset'])
 }).use(middleware.auth())

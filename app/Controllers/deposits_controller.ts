@@ -2,6 +2,10 @@ import Deposit from '#models/deposit';
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger';
 import db from '@adonisjs/lucid/services/db'
+import HistoricsController from './historics_controller.js';
+import Historic from '#models/historic';
+import Lastupdate from '#models/lastupdate';
+import { DateTime } from 'luxon';
 
 export default class DepositsController {
 
@@ -60,5 +64,44 @@ export default class DepositsController {
             logger.error(`Erro ao criar depósito: ${error}`);
             return response.badGateway(`Erro ao criar depósito: ${error}`);
         }
+    }
+
+    public async reset({ auth, params, response }: HttpContext) {
+
+        const idTarget = params.id;
+        const userAuth = await auth.getUserOrFail()
+
+        const accumulatedValue = (await db
+            .query()
+            .from('deposits')
+            .where('target_id', idTarget)
+            .sum('valor','soma')).at(0).soma
+
+        logger.info(`Valor acumulado para target_id ${idTarget}: ${accumulatedValue}`)
+
+        const rowsdeleted = await db
+            .query()
+            .from('deposits')
+            .where('target_id', idTarget)
+            .delete()
+
+        logger.info(`Linhas deletadas: ${rowsdeleted}`)
+
+        await HistoricsController.processDeposit(accumulatedValue, userAuth.id)
+
+        logger.info('saveDeposit: ' + accumulatedValue + ', user: ' + userAuth.id)
+
+        await Historic.create({
+            valor: accumulatedValue,
+            userId: userAuth.id
+        });
+        
+        await Lastupdate.create({
+            table: 'targets',
+            action: 'all',
+            dateUpdate: DateTime.now(),
+        })
+        
+        return response.ok({message: `Depósitos resetados para target_id ${idTarget}`, rowsdeleted})
     }
 }
