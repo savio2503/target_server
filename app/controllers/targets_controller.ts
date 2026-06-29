@@ -157,6 +157,14 @@ export default class TargetsController {
                     imagem: imagemBase64
                 })
 
+                await Lastupdate.create({
+                    table: 'imagem',
+                    action: 'create',
+                    detail: target.id.toString(),
+                    dateUpdate: DateTime.now(),
+                    user: user.id
+                })
+
                 //logger.info(`criou a imagem = ${imagem.id}`)
             } 
 
