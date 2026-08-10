@@ -1,6 +1,7 @@
 import Target from '#models/target'
 import type { HttpContext } from '@adonisjs/core/http'
 import HistoricsController from './historics_controller.js'
+import ExchangeRateService from '#services/exchange_rate_service'
 import logger from '@adonisjs/core/services/logger';
 import { createEditTargetValidator } from '#validators/create_edit_target'
 import Deposit from '#models/deposit';
@@ -84,28 +85,13 @@ export default class TargetsController {
     }
 
     private async getPorcetagemDolar(valorTotal: number, valorDepositado: number) {
+        const valorDolar = await ExchangeRateService.getUsdBrlRate()
+        const taxa = valorDolar * 0.02
+        const iof = (valorDolar + taxa) * 0.011
+        const dollarNomad = valorDolar + taxa + iof
+        const depositEmDolar = valorDepositado / dollarNomad
 
-        /*let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
-
-        var res = await fetch(url)
-            .then(res => res.text())
-            .then(obj => JSON.parse(obj))
-            .catch(err => { throw err });
-
-        //logger.info(`-> ${res.USDBRL.bid}`)
-        var valorDolar = Number(res.USDBRL.bid)*/
-        var valorDolar = 5.52
-        var taxa = valorDolar * 0.02
-        var iof = (valorDolar + taxa) * 0.011
-        var dollarNomad = valorDolar + taxa + iof;
-        var depositEmDolar = (valorDepositado) / dollarNomad;
-
-        /*Logger.info(`valor total -> ${valorDepositado}
-            , valorDolar -> ${valorDolar}
-            , taxa -> ${taxa}
-            , iof -> ${iof}
-            , dollarNomad -> ${dollarNomad}
-            , em dolar -> ${depositEmDolar}`)*/
+        logger.info(`valorDolar: ${valorDolar}`)
 
         return ((depositEmDolar * 100) / valorTotal)
     }
@@ -114,7 +100,8 @@ export default class TargetsController {
 
 
         try {
-            //logger.info(`start store`)
+            
+            logger.info(`chamou o criar target`)
 
             const data = request.all()
             //logger.info(`start 1 ${data}`)
@@ -209,6 +196,7 @@ export default class TargetsController {
         if (payload.ativo != null) {
             _ativo = payload.ativo == 1;
         }
+        logger.info(`chamou o update target ${target.id}`)
 
         target.merge({
             descricao: payload.descricao,
@@ -222,7 +210,7 @@ export default class TargetsController {
         });
         await target.save();
 
-        //logger.info(`update target = ${target.id}`)
+        logger.info(`update target imagem = ${payload.imagem != null ? payload.imagem.substring(0, 10) : 'imagem nula'}`)
 
         if (payload.imagem != null) {
 
@@ -277,6 +265,8 @@ export default class TargetsController {
             user: target.userId
         })
 
+        logger.info(`update target ${target.id} completed`)
+
         return response.ok({
             "id": target.id,
             "descricao": target.descricao,
@@ -294,6 +284,7 @@ export default class TargetsController {
         const target = await Target.findOrFail(params.id)
         const compradoparam = params.comprado
         const valorCompra = params.valorCompra
+        logger.info(`chamou o comprar para target ${target.id}`)
 
         if (valorCompra != null && valorCompra > 0) {
 
@@ -397,6 +388,7 @@ export default class TargetsController {
             if (target.length < 1) {
                 return response.notFound();
             }
+            logger.info(`chamou o destroy target ${target[0].id}`)
 
             var total = await HistoricsController.getTotal(target[0])
 

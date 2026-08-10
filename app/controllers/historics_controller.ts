@@ -5,6 +5,7 @@ import { historicValidator } from '#validators/historic';
 import logger from '@adonisjs/core/services/logger';
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import ExchangeRateService from '#services/exchange_rate_service'
 import Lastupdate from '#models/lastupdate';
 import { DateTime } from 'luxon';
 
@@ -32,18 +33,10 @@ export default class HistoricsController {
     }
 
     private static async getValorDolar() {
-        let url = 'https://economia.awesomeapi.com.br/last/USD-BRL';
-
-        var res = await fetch(url)
-            .then(res => res.text())
-            .then(obj => JSON.parse(obj))
-            .catch(err => { throw err });
-
-        //logger.info(`-> ${res.USDBRL.bid}`)
-        var valorDolar = Number(res.USDBRL.bid)
-        var taxa = valorDolar * 0.02
-        var iof = (valorDolar + taxa) * 0.011
-        var dollarNomad = valorDolar + taxa + iof;
+        const valorDolar = await ExchangeRateService.getUsdBrlRate()
+        const taxa = valorDolar * 0.02
+        const iof = (valorDolar + taxa) * 0.011
+        const dollarNomad = valorDolar + taxa + iof
 
         logger.info(`dolar: ${dollarNomad}`)
 

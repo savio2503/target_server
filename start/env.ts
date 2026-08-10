@@ -34,5 +34,25 @@ export default await Env.create(new URL('../', import.meta.url), {
   | Variables for configuring session package
   |----------------------------------------------------------
   */
-  SESSION_DRIVER: Env.schema.enum(['cookie', 'memory'] as const)
+  SESSION_DRIVER: Env.schema.enum(['cookie', 'memory'] as const),
+
+  /*
+  |----------------------------------------------------------
+  | Chave da API da Anthropic, usada como fallback do
+  | PriceAgentService quando nenhum adapter/dado estruturado
+  | resolve o preço de um site novo. Opcional: se ausente, o
+  | agente simplesmente pula essa camada.
+  |----------------------------------------------------------
+  */
+  ANTHROPIC_API_KEY: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Liga/desliga o agendador automático (start/scheduler.ts)
+  | que roda a checagem de preços a cada 1 hora. Padrão: true.
+  | Útil para desativar em ambientes onde o cron é feito
+  | externamente (ex: painel de Cron Jobs da hospedagem).
+  |----------------------------------------------------------
+  */
+  PRICE_CHECK_CRON_ENABLED: Env.schema.boolean.optional()
 })
