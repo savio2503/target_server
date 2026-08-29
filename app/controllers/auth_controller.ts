@@ -1,5 +1,5 @@
 import User from '#models/user'
-import { userValidator } from '#validators/user'
+import { avatarUpdateValidator, userValidator } from '#validators/user'
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
 
@@ -45,15 +45,23 @@ export default class AuthController {
 
     public async signin({request, response}: HttpContext) {
 
+        logger.info('signin called')
+
         const data = request.all()
         const payload = await userValidator.validate(data)
+
+        //logger.info(`payload: ${JSON.stringify(payload)}`)
         
         const user = await User.create({
             email: payload.email,
-            password: payload.password
+            password: payload.password,
+            name: payload.name,
+            avatarUrl: payload.avatar
         })
 
-        return response.ok(user);
+        //logger.info(`user created: ${JSON.stringify(user)}`)
+
+        return response.ok("cadastrado com sucesso");
 
     }
 
@@ -69,6 +77,47 @@ export default class AuthController {
             return response.ok(data)
         } catch (error) {
             logger.info(`error: ${error}`)
+        }
+    }
+
+    public async updateAvatar({ auth, request, response }: HttpContext) {
+ 
+        try {
+            const user = await auth.getUserOrFail()
+ 
+            const payload = await avatarUpdateValidator.validate(request.all())
+ 
+            let avatar = payload.avatar.trim()
+ 
+            // Remove o prefixo de data URI (ex: "data:image/png;base64,") caso exista,
+            // guardando sempre o base64 "puro" no banco.
+            const dataUriMatch = avatar.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/)
+            if (dataUriMatch) {
+                avatar = dataUriMatch[1]
+            }
+ 
+            const isUrl = /^https?:\/\//i.test(avatar)
+ 
+            if (!isUrl) {
+                // Valida se o restante do conteúdo é um base64 válido
+                const isValidBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(avatar) && avatar.length % 4 === 0
+ 
+                if (!isValidBase64) {
+                    return response.badRequest({ message: 'avatar deve ser uma URL válida ou uma string base64 válida.' })
+                }
+            }
+ 
+            user.avatarUrl = avatar
+            await user.save()
+ 
+            return response.ok({
+                message: 'Avatar atualizado com sucesso',
+                avatarUrl: user.avatarUrl
+            })
+ 
+        } catch (error) {
+            logger.info(`error updateAvatar: ${error}`)
+            return response.badRequest({ message: 'Não foi possível atualizar o avatar.' })
         }
     }
 }

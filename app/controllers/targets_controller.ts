@@ -91,7 +91,7 @@ export default class TargetsController {
         const dollarNomad = valorDolar + taxa + iof
         const depositEmDolar = valorDepositado / dollarNomad
 
-        logger.info(`valorDolar: ${valorDolar}`)
+        //logger.info(`valorDolar: ${valorDolar}`)
 
         return ((depositEmDolar * 100) / valorTotal)
     }

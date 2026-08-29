@@ -59,7 +59,7 @@ export default class ExchangeRateService {
       logger.warn(`Falha ao gravar cotação de dólar em cache: ${error.message}`)
     }
 
-    logger.info(`Cotação USD-BRL atualizada: ${rate} em ${rateDate}`)
+    //logger.info(`Cotação USD-BRL atualizada: ${rate} em ${rateDate}`)
 
     return rate
   }
@@ -96,7 +96,7 @@ export default class ExchangeRateService {
         .first()
 
       if (lastCached?.rate != null) {
-        logger.warn(`Usando última cotação em cache de ${lastCached.rateDate}`)
+        //logger.warn(`Usando última cotação em cache de ${lastCached.rateDate}`)
         return { rate: Number(lastCached.rate), rateDate: lastCached.rateDate }
       }
 
