@@ -28,6 +28,9 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare googleUid: string
 
+  @column()
+  declare isPremium: boolean
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

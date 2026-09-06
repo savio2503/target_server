@@ -17,7 +17,8 @@ export default class AuthController {
         return response.ok({
             message: "logado com sucesso",
             name: user.name,
-            image: user.avatarUrl
+            image: user.avatarUrl,
+            isPremium: user.isPremium
         })
     }
 
@@ -39,7 +40,10 @@ export default class AuthController {
 
         await auth.use('web').login(user)
 
-        return response.ok({message: "logado com sucesso"})
+        return response.ok({
+            message: "logado com sucesso",
+            isPremium: user.isPremium
+        })
 
     }
 
@@ -52,7 +56,7 @@ export default class AuthController {
 
         //logger.info(`payload: ${JSON.stringify(payload)}`)
         
-        const user = await User.create({
+        await User.create({
             email: payload.email,
             password: payload.password,
             name: payload.name,
