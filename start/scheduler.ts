@@ -13,6 +13,7 @@ import cron from 'node-cron'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { runPriceCheck } from '#services/price_check_runner'
+import TargetAllCacheService from '#services/target_all_cache_service'
 
 const ENABLED = env.get('PRICE_CHECK_CRON_ENABLED', true)
 
@@ -40,3 +41,8 @@ if (ENABLED) {
 } else {
   logger.info('[PriceCheck] agendador desativado via PRICE_CHECK_CRON_ENABLED=false')
 }
+
+void TargetAllCacheService.refreshAllUsers()
+  .then(() => logger.info('[TargetAllCache] pesquisa inicial concluída para todos os usuários'))
+  .catch((error) => logger.error(`[TargetAllCache] falha na pesquisa inicial: ${error.message}`))
+

@@ -54,5 +54,6 @@ export default await Env.create(new URL('../', import.meta.url), {
   | externamente (ex: painel de Cron Jobs da hospedagem).
   |----------------------------------------------------------
   */
-  PRICE_CHECK_CRON_ENABLED: Env.schema.boolean.optional()
+  PRICE_CHECK_CRON_ENABLED: Env.schema.boolean.optional(),
+
 })

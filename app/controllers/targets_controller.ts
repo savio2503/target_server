@@ -12,74 +12,19 @@ import db from '@adonisjs/lucid/services/db'
 import Lastupdate from '#models/lastupdate';
 import { DateTime } from 'luxon';
 import Historic from '#models/historic';
+import TargetAllCacheService from '#services/target_all_cache_service'
 
 export default class TargetsController {
 
-    public async all({ response, auth, params }: HttpContext) {
-
-    //logger.info("target all")
-
+    public async all({ request, response, auth, params }: HttpContext) {
         const user = await auth.getUserOrFail()
-        const targets = await Target.query()
-            .where('user_id', user.id)
-            .orderBy('posicao', 'desc')
-        var result = []
-        var order = params.order
-
-        logger.info(`all target order: ${order}`)
-
-        if (order == null) {
-            order = 1
-            logger.info(`all target order nulo: ${order}`)
-        }
-
-        for await (const target of targets) {
-
-            target.totalDeposit = Number(await HistoricsController.getTotal(target))
-            target.valor = Number(target.valor)
-
-            if (target.coinId != 1) {
-                target.porcetagem = await this.getPorcetagemDolar(target.valor, target.totalDeposit)
-            } else {
-                target.porcetagem = ((target.totalDeposit * 100) / target.valor)
-            }
-
-            //if (target.ativo)
-            //    logger.info(`target[${target.id}] = ${target.totalDeposit}, porc: ${target.porcetagem}`)
-
-            result.push({
-                "id": target.id,
-                "descricao": target.descricao,
-                "valor": target.valor,
-                "posicao": target.posicao,
-                "ativo": target.ativo,
-                "coin": target.coinId,
-                "total": target.totalDeposit,
-                "porcentagem": target.porcetagem,
-                "removebackground": target.removebackground,
-                "comprado": target.comprado,
-                "url": target.url,
-            })
-        }
-
-        //order == percetagem
-        if (order == 0) {
-            result.sort((a, b) => {
-                return b.porcentagem - a.porcentagem
-            })
-        } else if (order == 1) {
-            result.sort((a,b) => a.descricao.localeCompare(b.descricao, 'pt-BR', {sensitivity: "base"}))
-        } else if (order == 2) {
-            result.sort((a, b) => {
-                if (a.posicao == b.posicao) {
-                    return b.porcentagem - a.porcentagem
-                } else {
-                    return b.posicao - a.posicao
-                }
-            })
-        } 
-
-        //logger.info(`${JSON.stringify(result, null, 2)}`)
+        logger.info(
+            `[TargetAll] request=${request.method()} url=${request.url()} userId=${user.id} order=${params.order}`
+        )
+        const result = await TargetAllCacheService.get(user.id, Number(params.order))
+        logger.info(
+            `[TargetAll] resposta get_all userId=${user.id} order=${params.order} items=${result.length}`
+        )
 
         return response.ok(result)
     }
@@ -90,8 +35,6 @@ export default class TargetsController {
         const iof = (valorDolar + taxa) * 0.011
         const dollarNomad = valorDolar + taxa + iof
         const depositEmDolar = valorDepositado / dollarNomad
-
-        //logger.info(`valorDolar: ${valorDolar}`)
 
         return ((depositEmDolar * 100) / valorTotal)
     }
@@ -163,6 +106,7 @@ export default class TargetsController {
                 user: user.id
             })
 
+            await TargetAllCacheService.markUserStale(user.id)
 
             return response.ok({
                 "id": target.id,
@@ -265,6 +209,8 @@ export default class TargetsController {
             user: target.userId
         })
 
+        await TargetAllCacheService.markUserStale(target.userId)
+
         logger.info(`update target ${target.id} completed`)
 
         return response.ok({
@@ -298,7 +244,6 @@ export default class TargetsController {
             })
 
             await target.save();
-
             //retirando ou adicionando o valor do historico
 
             let totalDeposit = Number(await HistoricsController.getTotal(target))
@@ -367,6 +312,8 @@ export default class TargetsController {
             user: target.userId
         })
 
+        await TargetAllCacheService.markUserStale(target.userId)
+
         return response.ok({
             "id": target.id,
             "descricao": target.descricao,
@@ -407,6 +354,8 @@ export default class TargetsController {
                 dateUpdate: DateTime.now(),
                 user: userid
             })
+
+            await TargetAllCacheService.markUserStale(userid)
 
             return response.ok(`target ${params.id} deleted successfully`);
         } catch (error) {

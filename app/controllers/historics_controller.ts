@@ -8,6 +8,7 @@ import db from '@adonisjs/lucid/services/db'
 import ExchangeRateService from '#services/exchange_rate_service'
 import Lastupdate from '#models/lastupdate';
 import { DateTime } from 'luxon';
+import TargetAllCacheService from '#services/target_all_cache_service'
 
 export default class HistoricsController {
     public async get({ auth, response }: HttpContext) {
@@ -196,6 +197,7 @@ export default class HistoricsController {
             valor = valorResto;
         }
 
+        await TargetAllCacheService.markUserStale(userId)
         return resposta
     }
 

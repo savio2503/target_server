@@ -6,6 +6,8 @@ import HistoricsController from './historics_controller.js';
 import Historic from '#models/historic';
 import Lastupdate from '#models/lastupdate';
 import { DateTime } from 'luxon';
+import Target from '#models/target';
+import TargetAllCacheService from '#services/target_all_cache_service';
 
 export default class DepositsController {
 
@@ -48,16 +50,21 @@ export default class DepositsController {
         return response.ok(value)
     }
 
-    public async depositForTarget({ request, response }: HttpContext) {
+    public async depositForTarget({ request, response, auth }: HttpContext) {
         const { id, valor } = request.only(['id','valor']);
 
         try {
+            const user = await auth.getUserOrFail()
+            const target = await Target.findOrFail(id)
+
             const newDeposit = await Deposit.create({
                 targetId: id,
                 valor: valor,
             });
 
-            logger.info(`Novo depósito criado para target_id ${id} com valor ${valor}`);
+            await TargetAllCacheService.markUserStale(target.userId)
+
+            logger.info(`Novo depósito criado para target_id ${id} com valor ${valor} userId=${user.id}`);
 
             return response.created(newDeposit);
         } catch(error) {
@@ -88,6 +95,7 @@ export default class DepositsController {
         logger.info(`Linhas deletadas: ${rowsdeleted}`)
 
         await HistoricsController.processDeposit(accumulatedValue, userAuth.id)
+        await TargetAllCacheService.markUserStale(userAuth.id)
 
         logger.info('saveDeposit: ' + accumulatedValue + ', user: ' + userAuth.id)
 
