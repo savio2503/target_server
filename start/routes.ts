@@ -25,6 +25,8 @@ router.get('/', async () => {
 
 router.post('/login',     [AuthController, 'login'])
 router.post('/signin',     [AuthController, 'signin'])
+router.post('/auth/2fa/verify', [AuthController, 'verifyTwoFactor'])
+router.post('/auth/2fa/resend', [AuthController, 'resendTwoFactor'])
 router.get('/allCoin',    [CoinsController, 'allCoin'])
 router.post('/storeCoin', [CoinsController, 'storeCoin'])
 

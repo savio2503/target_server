@@ -31,6 +31,15 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare isPremium: boolean
 
+  @column({ serializeAs: null })
+  declare twoFactorCodeHash: string | null
+
+  @column.dateTime({ serializeAs: null })
+  declare twoFactorExpiresAt: DateTime | null
+
+  @column({ serializeAs: null })
+  declare twoFactorAttempts: number
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

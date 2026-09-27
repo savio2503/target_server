@@ -14,3 +14,16 @@ export const avatarUpdateValidator = vine.compile(
         avatar: vine.string().trim().minLength(1),
     })
 )
+
+export const twoFactorVerifyValidator = vine.compile(
+    vine.object({
+        email: vine.string().trim().email(),
+        code: vine.string().trim().fixedLength(6),
+    })
+)
+
+export const twoFactorResendValidator = vine.compile(
+    vine.object({
+        email: vine.string().trim().email(),
+    })
+)

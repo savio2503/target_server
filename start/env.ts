@@ -56,4 +56,29 @@ export default await Env.create(new URL('../', import.meta.url), {
   */
   PRICE_CHECK_CRON_ENABLED: Env.schema.boolean.optional(),
 
+  /*
+  |----------------------------------------------------------
+  | Configuração de envio de e-mail (usado para o código de
+  | verificação em duas etapas - 2FA - no login/cadastro).
+  | Em desenvolvimento, SMTP e 2FA são opcionais (ver
+  | TWO_FACTOR_ENABLED abaixo).
+  |----------------------------------------------------------
+  */
+  SMTP_HOST: Env.schema.string.optional(),
+  SMTP_PORT: Env.schema.number.optional(),
+  SMTP_SECURE: Env.schema.boolean.optional(),
+  SMTP_USERNAME: Env.schema.string.optional(),
+  SMTP_PASSWORD: Env.schema.string.optional(),
+  MAIL_FROM_ADDRESS: Env.schema.string.optional(),
+  MAIL_FROM_NAME: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Liga/desliga a exigência de 2FA no login. Se não definida,
+  | fica ativa em produção (NODE_ENV=production) e desativada
+  | em desenvolvimento/teste, para não depender de SMTP local.
+  |----------------------------------------------------------
+  */
+  TWO_FACTOR_ENABLED: Env.schema.boolean.optional(),
+
 })
