@@ -29,6 +29,30 @@ export default class TargetsController {
         return response.ok(result)
     }
 
+    /**
+     * Since: GET /all/:order/since/:lastUpdate
+     * lastUpdate no mesmo formato de /lastupdates/:date (yyyy-MM-ddHH:mm:ss).
+     * Resposta: { targets, deletedIds } - somente o que mudou (fluxo independente do getall).
+     */
+    public async allSince({ response, auth, params }: HttpContext) {
+        const user = await auth.getUserOrFail()
+
+        const since = DateTime.fromFormat(params.lastUpdate, 'yyyy-MM-ddHH:mm:ss').plus({ hours: 3 })
+
+        if (!since.isValid) {
+            return response.badRequest({
+                error: 'Formato de data inválido. Use o formato yyyy-MM-ddHH:mm:ss',
+            })
+        }
+
+        // Sem await: o registro (e o eventual cache em background) não atrasa a resposta.
+        void TargetAllCacheService.registerSinceUser(user.id)
+
+        const result = await TargetAllCacheService.getUpdatedSince(user.id, since)
+
+        return response.ok(result)
+    }
+
     private async getPorcetagemDolar(valorTotal: number, valorDepositado: number) {
         const valorDolar = await ExchangeRateService.getUsdBrlRate()
         const taxa = valorDolar * 0.02
@@ -121,10 +145,11 @@ export default class TargetsController {
                 "ativo": target.ativo ? 1 : 0
             })
         } catch (error) {
-            logger.error(`Validation erro: ${error.message}`)
+            const message = error instanceof Error ? error.message : String(error)
+            logger.error(`Validation erro: ${message}`)
             return response.status(502).send({
                 message: 'validation error',
-                error: error.message
+                error: message
             })
         }
     }
@@ -293,6 +318,7 @@ export default class TargetsController {
                 table: 'targets',
                 action: 'all',
                 dateUpdate: DateTime.now(),
+                user: userAuth.id,
             })
 
         } else {

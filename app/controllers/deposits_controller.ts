@@ -62,6 +62,14 @@ export default class DepositsController {
                 valor: valor,
             });
 
+            await Lastupdate.create({
+                table: 'targets',
+                action: 'update',
+                detail: target.id.toString(),
+                dateUpdate: DateTime.now(),
+                user: target.userId,
+            })
+
             await TargetAllCacheService.markUserStale(target.userId)
 
             logger.info(`Novo depósito criado para target_id ${id} com valor ${valor} userId=${user.id}`);
@@ -107,7 +115,9 @@ export default class DepositsController {
         await Lastupdate.create({
             table: 'targets',
             action: 'all',
+            detail: idTarget.toString(),
             dateUpdate: DateTime.now(),
+            user: userAuth.id,
         })
         
         return response.ok({message: `Depósitos resetados para target_id ${idTarget}`, rowsdeleted})

@@ -36,6 +36,7 @@ router.group(() => {
   router.resource('/target',TargetsController).only(['store','update','destroy'])
   router.put('/comprar/:id/:comprado/:valorCompra', [TargetsController, 'comprar'])
   router.get('/all/:order',            [TargetsController,   'all'])
+  router.get('/all/:order/since/:lastUpdate', [TargetsController, 'allSince'])
   router.get('/target/:id',     [TargetsController,   'index'])
   //router.get('/image/:id',      [TargetsController,   'image'])
   //router.put('/image',          [TargetsController,   'imageUpdate'])

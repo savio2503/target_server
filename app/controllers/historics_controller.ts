@@ -187,6 +187,14 @@ export default class HistoricsController {
 
 
 
+                await Lastupdate.create({
+                    table: 'targets',
+                    action: 'update',
+                    detail: target.id.toString(),
+                    dateUpdate: DateTime.now(),
+                    user: userId,
+                })
+
                 resposta.push(deposit)
             }
             logger.info(`------------------------`)
@@ -237,6 +245,7 @@ export default class HistoricsController {
             table: 'targets',
             action: 'all',
             dateUpdate: DateTime.now(),
+            user: userAuth.id,
         })
 
         return response.ok(resposta)
