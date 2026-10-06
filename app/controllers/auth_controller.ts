@@ -1,6 +1,7 @@
 import User from '#models/user'
 import {
     avatarUpdateValidator,
+    nameUpdateValidator,
     twoFactorResendValidator,
     twoFactorVerifyValidator,
     userValidator,
@@ -215,6 +216,24 @@ export default class AuthController {
         } catch (error) {
             logger.info(`error updateAvatar: ${error}`)
             return response.badRequest({ message: 'Não foi possível atualizar o avatar.' })
+        }
+    }
+
+    public async updateName({ auth, request, response }: HttpContext) {
+        try {
+            const user = await auth.getUserOrFail()
+            const payload = await nameUpdateValidator.validate(request.all())
+
+            user.name = payload.name
+            await user.save()
+
+            return response.ok({
+                message: 'Nome atualizado com sucesso',
+                name: user.name
+            })
+        } catch (error) {
+            logger.info(`error updateName: ${error}`)
+            return response.badRequest({ message: 'Não foi possível atualizar o nome.' })
         }
     }
 }

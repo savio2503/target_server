@@ -42,6 +42,7 @@ router.group(() => {
   //router.put('/image',          [TargetsController,   'imageUpdate'])
   router.get('auth/me',         [AuthController,      'me'])
   router.put('/user/avatar',    [AuthController,      'updateAvatar'])
+  router.put('/user/name',      [AuthController,      'updateName'])
   router.get('/historic',       [HistoricsController, 'get'])
   router.post('/inside',        [HistoricsController, 'inside'])
   router.get('/deposit/:id',    [DepositsController,  'get'])
