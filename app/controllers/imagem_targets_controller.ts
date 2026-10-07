@@ -44,10 +44,15 @@ export default class ImagemTargetsController {
             return response.notFound({ message: 'Imagem não encontrada para o idTarget fornecido.' })
         }
 
-        const imagemBase64 = imagemRecord.imagem
+        let imagemBase64 = imagemRecord.imagem
 
         if (imagemBase64.toLowerCase().startsWith('http') || imagemBase64.startsWith(' ')) {
             return response.ok({ imagem: imagemBase64 })
+        }
+
+        const match = imagemBase64.match(/^data:image\/[a-zA-Z0-9.+]+;base64,(.+)$/)
+        if (match) {
+            imagemBase64 = match[1]
         }
 
         if (!tamMax) {
@@ -55,7 +60,6 @@ export default class ImagemTargetsController {
         }
 
         try {
-
             const buffer = Buffer.from(imagemBase64, 'base64')
             const imagemRedimensionada = await sharp(buffer)
             .resize({

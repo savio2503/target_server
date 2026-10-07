@@ -106,6 +106,8 @@ export default class TargetsController {
                     }
                 }
 
+                imagemBase64 = await ImageConverter.compressBase64(imagemBase64);
+
                 await ImagemTarget.create({
                     idTarget: target.id,
                     imagem: imagemBase64
@@ -197,6 +199,8 @@ export default class TargetsController {
                     imagemBase64 = payload.imagem
                 }
             }
+
+            imagemBase64 = await ImageConverter.compressBase64(imagemBase64);
 
             if (imagem != null) {
 
