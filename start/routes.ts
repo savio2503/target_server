@@ -36,7 +36,7 @@ router.group(() => {
   router.resource('/target',TargetsController).only(['store','update','destroy'])
   router.put('/comprar/:id/:comprado/:valorCompra', [TargetsController, 'comprar'])
   router.get('/all/:order',            [TargetsController,   'all'])
-  router.get('/all/:order/since/:lastUpdate', [TargetsController, 'allSince'])
+  router.get('/all/:order/since/:lastUpdate/:utc?', [TargetsController, 'allSince'])
   router.get('/target/:id',     [TargetsController,   'index'])
   //router.get('/image/:id',      [TargetsController,   'image'])
   //router.put('/image',          [TargetsController,   'imageUpdate'])
@@ -56,7 +56,7 @@ router.group(() => {
 
   router.put('/imagens/:idTarget', [ImagemTargetsController, 'update']) // 3 - Atualizar imagem
 
-  router.get('/lastupdates/:date', [LastUpdatesController, 'listAfterDate'])
+  router.get('/lastupdates/:date/:utc?', [LastUpdatesController, 'listAfterDate'])
 
   router.get('/reset/:id', [DepositsController, 'reset'])
 }).use(middleware.auth())

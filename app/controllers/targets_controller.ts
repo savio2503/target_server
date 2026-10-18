@@ -11,6 +11,7 @@ import ImageConverter from '../helpers/ImageConverter.js';
 import db from '@adonisjs/lucid/services/db'
 import Lastupdate from '#models/lastupdate';
 import { DateTime } from 'luxon';
+import { parseUtcOffsetMinutes } from '../helpers/date_helper.js';
 import Historic from '#models/historic';
 import TargetAllCacheService from '#services/target_all_cache_service'
 
@@ -30,20 +31,34 @@ export default class TargetsController {
     }
 
     /**
-     * Since: GET /all/:order/since/:lastUpdate
+     * Since: GET /all/:order/since/:lastUpdate/:utc?
      * lastUpdate no mesmo formato de /lastupdates/:date (yyyy-MM-ddHH:mm:ss).
+     * utc: GMT/UTC atual do dispositivo (ex: -3, +2, -03:00, UTC-3). Se omitido, assume -3 (GMT-3).
      * Resposta: { targets, deletedIds } - somente o que mudou (fluxo independente do getall).
      */
-    public async allSince({ response, auth, params }: HttpContext) {
+    public async allSince({ request, response, auth, params }: HttpContext) {
         const user = await auth.getUserOrFail()
 
-        const since = DateTime.fromFormat(params.lastUpdate, 'yyyy-MM-ddHH:mm:ss').plus({ hours: 3 })
+        const rawDate = DateTime.fromFormat(params.lastUpdate, 'yyyy-MM-ddHH:mm:ss')
 
-        if (!since.isValid) {
+        if (!rawDate.isValid) {
             return response.badRequest({
                 error: 'Formato de data inválido. Use o formato yyyy-MM-ddHH:mm:ss',
             })
         }
+
+        const utcParam = params.utc ?? request.input('utc')
+        const offsetMinutes = parseUtcOffsetMinutes(utcParam)
+
+        if (offsetMinutes === null) {
+            return response.badRequest({
+                error: 'Formato de UTC inválido. Envie o GMT como número (ex: -3, 3) ou offset (ex: -03:00, +02:00)',
+            })
+        }
+
+        // Converte do GMT atual do dispositivo para GMT 0 (UTC 0):
+        // subtrai o offset do dispositivo (ex: dispositivo em GMT-3 -> offset = -180 min -> 12:00 - (-180min) = 15:00 UTC)
+        const since = rawDate.minus({ minutes: offsetMinutes })
 
         // Sem await: o registro (e o eventual cache em background) não atrasa a resposta.
         void TargetAllCacheService.registerSinceUser(user.id)
