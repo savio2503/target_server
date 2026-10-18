@@ -72,6 +72,18 @@ export default class HistoricsController {
         var valorResto: number = 0.0;
         var valorDolar: number = await HistoricsController.getValorDolar();
 
+        let totalsMap = new Map<number, number>();
+        let sums = await db.from('deposits')
+            .join('targets', 'deposits.target_id', 'targets.id')
+            .where('targets.user_id', userId)
+            .select('deposits.target_id')
+            .sum('deposits.valor as soma')
+            .groupBy('deposits.target_id');
+
+        for (let s of sums) {
+            totalsMap.set(s.target_id, Number(s.soma));
+        }
+
         logger.info(`total: ${valor}`)
 
         while (true) {
@@ -89,12 +101,16 @@ export default class HistoricsController {
                     .where('ativo', '1')
             }
 
-            for await (const target of targets) {
+            var depositsToCreate: any[] = []
+            var lastupdatesToCreate: any[] = []
+
+            for (const target of targets) {
 
                 var pesoLocal = target.posicao
                 var aDepositar = ((pesoLocal / somaPosicaoAtivo) * valor)
 
-                var somaDep = (await this.getTotal(target));
+                var somaDepVal = totalsMap.get(target.id);
+                var somaDep = somaDepVal !== undefined ? somaDepVal : null;
                 //logger.info(`a depositar ${aDepositar}`)
                 logger.info(`------------------------`)
 
@@ -180,23 +196,31 @@ export default class HistoricsController {
                 }
 
                 logger.info(`target ${target.descricao}: U$ ${aDepositar}`)
-                var deposit = await Deposit.create({
+                
+                totalsMap.set(target.id, (Number(somaDep || 0) + Number(aDepositar)));
+                
+                depositsToCreate.push({
                     targetId: target.id,
                     valor: aDepositar
                 });
 
-
-
-                await Lastupdate.create({
+                lastupdatesToCreate.push({
                     table: 'targets',
                     action: 'update',
                     detail: target.id.toString(),
                     dateUpdate: DateTime.now(),
                     user: userId,
-                })
-
-                resposta.push(deposit)
+                });
             }
+
+            if (depositsToCreate.length > 0) {
+                const createdDeposits = await Deposit.createMany(depositsToCreate)
+                resposta.push(...createdDeposits)
+            }
+            if (lastupdatesToCreate.length > 0) {
+                await Lastupdate.createMany(lastupdatesToCreate)
+            }
+
             logger.info(`------------------------`)
 
             if (valorResto <= 0.1) {

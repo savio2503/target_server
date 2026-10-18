@@ -26,7 +26,13 @@ function getPreviousBusinessDay(date: DateTime): DateTime {
 }
 
 export default class ExchangeRateService {
+  private static cachedRate: number | null = null;
+
   public static async getUsdBrlRate(): Promise<number> {
+    if (this.cachedRate !== null) {
+      return this.cachedRate;
+    }
+
     const previousBusinessDay = getPreviousBusinessDay(DateTime.now()).toISODate()
 
     const latestCached = await ExchangeRate.query()
@@ -36,7 +42,8 @@ export default class ExchangeRateService {
       .first()
 
     if (latestCached && latestCached.rateDate && previousBusinessDay && latestCached.rateDate >= previousBusinessDay) {
-      return Number(latestCached.rate)
+      this.cachedRate = Number(latestCached.rate)
+      return this.cachedRate
     }
 
     const { rate, rateDate } = await this.fetchUsdBrlRate()
@@ -61,6 +68,7 @@ export default class ExchangeRateService {
 
     //logger.info(`Cotação USD-BRL atualizada: ${rate} em ${rateDate}`)
 
+    this.cachedRate = rate
     return rate
   }
 
