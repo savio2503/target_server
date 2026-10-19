@@ -7,13 +7,27 @@ import sharp from 'sharp'
 
 export default class ImagemTargetsController {
 
-    public async index({ response }: HttpContext) {
-        const imagens = await ImagemTarget.all()
+    public async index({ auth, response }: HttpContext) {
+        const user = await auth.getUserOrFail()
+        
+        // Retorna apenas imagens dos targets pertencentes ao usuário logado
+        const imagens = await ImagemTarget.query()
+            .whereIn('idTarget', (query) => {
+                query.from('targets').select('id').where('user_id', user.id)
+            })
+
         return response.ok(imagens)
     }
 
-    public async showDetails({ params, response }: HttpContext) {
+    public async showDetails({ auth, params, response }: HttpContext) {
+        const user = await auth.getUserOrFail()
         const { idTarget } = params
+
+        const target = await Target.query().where('id', idTarget).where('userId', user.id).first()
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
+
         const imagem = await ImagemTarget.query()
             .where('idTarget', idTarget)
             .select('id', 'updated_at')
@@ -31,9 +45,15 @@ export default class ImagemTargetsController {
         return response.ok(formattedImagem)
     }
 
-    public async showImage({ params, request, response }: HttpContext) {
+    public async showImage({ auth, params, request, response }: HttpContext) {
+        const user = await auth.getUserOrFail()
         const { idTarget } = params
         const tamMax = request.input('tamMax')
+
+        const target = await Target.query().where('id', idTarget).where('userId', user.id).first()
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
 
         const imagemRecord = await ImagemTarget.query()
             .where('idTarget', idTarget)
@@ -60,11 +80,14 @@ export default class ImagemTargetsController {
         }
 
         try {
+            const parsedTamMax = parseInt(tamMax)
+            const safeTamMax = Math.min(Math.max(parsedTamMax, 16), 2048) // Limite seguro para evitar DoS de memória
+
             const buffer = Buffer.from(imagemBase64, 'base64')
             const imagemRedimensionada = await sharp(buffer)
             .resize({
-                width: parseInt(tamMax),
-                height: parseInt(tamMax),
+                width: safeTamMax,
+                height: safeTamMax,
                 fit: 'inside',
                 withoutEnlargement: true
             })
@@ -79,13 +102,17 @@ export default class ImagemTargetsController {
         }
     }
 
-    public async update({ params, request, response }: HttpContext) {
+    public async update({ auth, params, request, response }: HttpContext) {
+        const user = await auth.getUserOrFail()
         const { idTarget } = params
         const { imagem } = request.only(['imagem'])
 
-        const targetImagem = await ImagemTarget.findBy('idTarget', idTarget)
+        const target = await Target.query().where('id', idTarget).where('userId', user.id).first()
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
 
-        const target = await Target.findBy('id', idTarget)
+        const targetImagem = await ImagemTarget.findBy('idTarget', idTarget)
 
         if (!targetImagem) {
             return response.notFound({ message: 'Imagem não encontrada para o idTarget fornecido.' })
@@ -99,7 +126,7 @@ export default class ImagemTargetsController {
             action: 'update',
             detail: idTarget.toString(),
             dateUpdate: DateTime.now(),
-            user: target?.userId
+            user: user.id
         })
 
         return response.ok({ message: 'Imagem atualizada com sucesso.', data: targetImagem })

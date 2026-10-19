@@ -11,6 +11,9 @@ import logger from '@adonisjs/core/services/logger'
 import app from '@adonisjs/core/services/app'
 import env from '#start/env'
 import TwoFactorService from '#services/two_factor_service'
+import { OAuth2Client } from 'google-auth-library'
+
+const googleOAuthClient = new OAuth2Client()
 
 /**
  * Em produção o 2FA é sempre exigido. Em desenvolvimento/teste ele
@@ -118,7 +121,47 @@ export default class AuthController {
 
     public async loginWithGoogle({auth, request, response} : HttpContext) {
 
-        const { email, name, photo, uid } = request.only(['email', 'name', 'photo', 'uid'])
+        const { idToken, email: fallbackEmail, name: fallbackName, photo: fallbackPhoto, uid: fallbackUid } = request.only([
+            'idToken',
+            'email',
+            'name',
+            'photo',
+            'uid',
+        ])
+
+        let email = fallbackEmail
+        let name = fallbackName
+        let photo = fallbackPhoto
+        let googleUid = fallbackUid
+
+        if (idToken) {
+            try {
+                const audience = env.get('GOOGLE_CLIENT_ID')
+                const ticket = await googleOAuthClient.verifyIdToken({
+                    idToken,
+                    audience: audience || undefined,
+                })
+                const payload = ticket.getPayload()
+
+                if (!payload || !payload.email) {
+                    return response.unauthorized({ errors: [{ message: 'Token do Google inválido' }] })
+                }
+
+                email = payload.email
+                name = payload.name || name || email.split('@')[0]
+                photo = payload.picture || photo || null
+                googleUid = payload.sub || googleUid
+            } catch (err: any) {
+                logger.error(`[GoogleAuth] Falha ao verificar idToken: ${err.message}`)
+                return response.unauthorized({ errors: [{ message: 'Falha na validação do token do Google' }] })
+            }
+        } else if (app.inProduction) {
+            return response.badRequest({ errors: [{ message: 'idToken do Google é obrigatório em ambiente de produção' }] })
+        }
+
+        if (!email) {
+            return response.badRequest({ errors: [{ message: 'E-mail não fornecido' }] })
+        }
 
         let user = await User.findBy('email', email)
 
@@ -127,9 +170,12 @@ export default class AuthController {
                 email: email,
                 name: name,
                 avatarUrl: photo,
-                googleUid: uid,
+                googleUid: googleUid,
                 password: Math.random().toString(36).slice(-8)
             })
+        } else if (googleUid && !user.googleUid) {
+            user.googleUid = googleUid
+            await user.save()
         }
 
         await auth.use('web').login(user)

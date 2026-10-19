@@ -81,4 +81,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   */
   TWO_FACTOR_ENABLED: Env.schema.boolean.optional(),
 
+  /*
+  |----------------------------------------------------------
+  | Segurança: Origens permitidas para CORS e Client ID Google
+  |----------------------------------------------------------
+  */
+  CORS_ALLOWED_ORIGINS: Env.schema.string.optional(),
+  GOOGLE_CLIENT_ID: Env.schema.string.optional(),
 })

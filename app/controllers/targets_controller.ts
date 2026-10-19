@@ -171,11 +171,15 @@ export default class TargetsController {
         }
     }
 
-    public async update({ request, response, params }: HttpContext) {
-
+    public async update({ auth, request, response, params }: HttpContext) {
+        const user = await auth.getUserOrFail()
         const data = request.all()
         const payload = await createEditTargetValidator.validate(data)
-        const target = await Target.findOrFail(params.id);
+        const target = await Target.query().where('id', params.id).where('userId', user.id).first()
+
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
 
         var _ativo = target.ativo;
 
@@ -270,15 +274,18 @@ export default class TargetsController {
     }
 
     public async comprar({ auth, response, params }: HttpContext) {
+        const userAuth = await auth.getUserOrFail()
+        const target = await Target.query().where('id', params.id).where('userId', userAuth.id).first()
 
-        const target = await Target.findOrFail(params.id)
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
+
         const compradoparam = params.comprado
         const valorCompra = params.valorCompra
         logger.info(`chamou o comprar para target ${target.id}`)
 
         if (valorCompra != null && valorCompra > 0) {
-
-            const userAuth = await auth.getUserOrFail()
 
             //modificando o target
             target.merge({
@@ -373,13 +380,13 @@ export default class TargetsController {
 
     public async destroy({ auth, response, params }: HttpContext) {
         try {
-            var targets = await Target.query().where('id', params.id)
+            const userAuth = await auth.getUserOrFail()
+            const target = await Target.query().where('id', params.id).where('userId', userAuth.id).first()
 
-            if (targets.length < 1) {
-                return response.notFound();
+            if (!target) {
+                return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' });
             }
 
-            var target = targets[0]
             var userid = target.userId
             logger.info(`chamou o destroy target ${target.id}`)
 
@@ -392,7 +399,6 @@ export default class TargetsController {
             const valorTotal = Number(total || 0);
             if (valorTotal != 0) {
                 logger.info(`Distribuindo os depositos de valor: ${valorTotal}`);
-                const userAuth = await auth.getUserOrFail();
                 await HistoricsController.processDeposit(valorTotal, userAuth.id);
             } else {
                 logger.info(`target nao possuia depositos`);
@@ -415,8 +421,13 @@ export default class TargetsController {
         }
     }
 
-    public async index({ response, params }: HttpContext) {
-        const target = await Target.findOrFail(params.id)
+    public async index({ auth, response, params }: HttpContext) {
+        const user = await auth.getUserOrFail()
+        const target = await Target.query().where('id', params.id).where('userId', user.id).first()
+
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
 
         target.totalDeposit = Number(await HistoricsController.getTotal(target))
         target.valor = Number(target.valor)

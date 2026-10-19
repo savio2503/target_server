@@ -1,7 +1,7 @@
 /*
-|--------------------------------------------------------------------------
+|----------------------------------------------------------
 | Routes file
-|--------------------------------------------------------------------------
+|----------------------------------------------------------
 |
 | The routes file is used for defining the HTTP routes.
 |
@@ -16,6 +16,11 @@ import HistoricsController from '#controllers/historics_controller'
 import DepositsController from '#controllers/deposits_controller'
 import ImagemTargetsController from '#controllers/imagem_targets_controller'
 import LastUpdatesController from '#controllers/lastupdates_controller'
+import {
+  authRateLimiter,
+  twoFactorResendRateLimiter,
+  twoFactorVerifyRateLimiter,
+} from '#middleware/auth_rate_limiters'
 
 router.get('/', async () => {
   return {
@@ -23,40 +28,35 @@ router.get('/', async () => {
   }
 })
 
-router.post('/login',     [AuthController, 'login'])
-router.post('/signin',     [AuthController, 'signin'])
-router.post('/auth/2fa/verify', [AuthController, 'verifyTwoFactor'])
-router.post('/auth/2fa/resend', [AuthController, 'resendTwoFactor'])
-router.get('/allCoin',    [CoinsController, 'allCoin'])
+router.post('/login', [AuthController, 'login']).use(authRateLimiter)
+router.post('/signin', [AuthController, 'signin']).use(authRateLimiter)
+router.post('/auth/2fa/verify', [AuthController, 'verifyTwoFactor']).use(twoFactorVerifyRateLimiter)
+router.post('/auth/2fa/resend', [AuthController, 'resendTwoFactor']).use(twoFactorResendRateLimiter)
+router.post('auth/google', [AuthController, 'loginWithGoogle']).use(authRateLimiter)
+
+router.get('/allCoin', [CoinsController, 'allCoin'])
 router.post('/storeCoin', [CoinsController, 'storeCoin'])
 
-router.post('auth/google', [AuthController, 'loginWithGoogle'])
-
 router.group(() => {
-  router.resource('/target',TargetsController).only(['store','update','destroy'])
+  router.resource('/target', TargetsController).only(['store', 'update', 'destroy'])
   router.put('/comprar/:id/:comprado/:valorCompra', [TargetsController, 'comprar'])
-  router.get('/all/:order',            [TargetsController,   'all'])
+  router.get('/all/:order', [TargetsController, 'all'])
   router.get('/all/:order/since/:lastUpdate/:utc?', [TargetsController, 'allSince'])
-  router.get('/target/:id',     [TargetsController,   'index'])
-  //router.get('/image/:id',      [TargetsController,   'image'])
-  //router.put('/image',          [TargetsController,   'imageUpdate'])
-  router.get('auth/me',         [AuthController,      'me'])
-  router.put('/user/avatar',    [AuthController,      'updateAvatar'])
-  router.put('/user/name',      [AuthController,      'updateName'])
-  router.get('/historic',       [HistoricsController, 'get'])
-  router.post('/inside',        [HistoricsController, 'inside'])
-  router.get('/deposit/:id',    [DepositsController,  'get'])
-  router.get('/sumdeposit/:id', [DepositsController,  'getSum'])
-  router.post('/insideTarget',  [DepositsController,  'depositForTarget'])
+  router.get('/target/:id', [TargetsController, 'index'])
+  router.get('auth/me', [AuthController, 'me'])
+  router.put('/user/avatar', [AuthController, 'updateAvatar'])
+  router.put('/user/name', [AuthController, 'updateName'])
+  router.get('/historic', [HistoricsController, 'get'])
+  router.post('/inside', [HistoricsController, 'inside'])
+  router.get('/deposit/:id', [DepositsController, 'get'])
+  router.get('/sumdeposit/:id', [DepositsController, 'getSum'])
+  router.post('/insideTarget', [DepositsController, 'depositForTarget'])
 
-  router.get('/imagens', [ImagemTargetsController, 'index']) // 1 - Pegar todas as imagens
-
-  router.get('/imagens/:idTarget/details', [ImagemTargetsController, 'showDetails']) // 2.1 - ID e updatedAt
-  router.get('/imagens/:idTarget/image', [ImagemTargetsController, 'showImage'])     // 2.2 - Apenas imagem
-
-  router.put('/imagens/:idTarget', [ImagemTargetsController, 'update']) // 3 - Atualizar imagem
+  router.get('/imagens', [ImagemTargetsController, 'index']) // Pegar imagens dos targets do usuário
+  router.get('/imagens/:idTarget/details', [ImagemTargetsController, 'showDetails'])
+  router.get('/imagens/:idTarget/image', [ImagemTargetsController, 'showImage'])
+  router.put('/imagens/:idTarget', [ImagemTargetsController, 'update'])
 
   router.get('/lastupdates/:date/:utc?', [LastUpdatesController, 'listAfterDate'])
-
   router.get('/reset/:id', [DepositsController, 'reset'])
 }).use(middleware.auth())

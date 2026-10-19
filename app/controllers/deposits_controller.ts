@@ -11,25 +11,28 @@ import TargetAllCacheService from '#services/target_all_cache_service';
 
 export default class DepositsController {
 
-    public async get({ params, response }: HttpContext) {
+    public async get({ auth, params, response }: HttpContext) {
         const idTarget = params.id;
             
         try {
+            const user = await auth.getUserOrFail()
+            const target = await Target.query().where('id', idTarget).where('userId', user.id).first()
+
+            if (!target) {
+                return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+            }
 
             const deposits = await db
                 .from('deposits')
                 .select(db.rawQuery(`sum(valor) as valor, date_format(created_at, '%Y/%m') as mes`))
-                .where('target_id',idTarget)
+                .where('target_id', idTarget)
                 .groupByRaw(`date_format(created_at, '%Y/%m')`)
                 .orderByRaw(`date_format(created_at, '%Y/%m') desc`)
-
 
             for (const deposit of deposits) {
                 deposit.valor = Number(deposit.valor)
                 logger.info(`valor: ${deposit.valor}`)
             }
-
-            //logger.info(`${deposits}`)
 
             return response.ok(deposits);
         } catch (error) {
@@ -37,15 +40,20 @@ export default class DepositsController {
         }
     }
 
-    public async getSum({ params, response}: HttpContext) {
-
+    public async getSum({ auth, params, response}: HttpContext) {
         const idTarget = params.id;
+        const user = await auth.getUserOrFail()
+        const target = await Target.query().where('id', idTarget).where('userId', user.id).first()
+
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
 
         const value = (await db
             .query()
             .from('deposits')
             .where('target_id', idTarget)
-            .sum('valor','soma')).at(0).soma
+            .sum('valor','soma')).at(0)?.soma ?? 0
 
         return response.ok(value)
     }
@@ -55,7 +63,11 @@ export default class DepositsController {
 
         try {
             const user = await auth.getUserOrFail()
-            const target = await Target.findOrFail(id)
+            const target = await Target.query().where('id', id).where('userId', user.id).first()
+
+            if (!target) {
+                return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+            }
 
             const newDeposit = await Deposit.create({
                 targetId: id,
@@ -82,15 +94,19 @@ export default class DepositsController {
     }
 
     public async reset({ auth, params, response }: HttpContext) {
-
         const idTarget = params.id;
         const userAuth = await auth.getUserOrFail()
+        const target = await Target.query().where('id', idTarget).where('userId', userAuth.id).first()
+
+        if (!target) {
+            return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
+        }
 
         const accumulatedValue = (await db
             .query()
             .from('deposits')
             .where('target_id', idTarget)
-            .sum('valor','soma')).at(0).soma
+            .sum('valor','soma')).at(0)?.soma ?? 0
 
         logger.info(`Valor acumulado para target_id ${idTarget}: ${accumulatedValue}`)
 
@@ -102,16 +118,17 @@ export default class DepositsController {
 
         logger.info(`Linhas deletadas: ${rowsdeleted}`)
 
-        await HistoricsController.processDeposit(accumulatedValue, userAuth.id)
+        if (Number(accumulatedValue) > 0) {
+            await HistoricsController.processDeposit(accumulatedValue, userAuth.id)
+            await Historic.create({
+                valor: accumulatedValue,
+                userId: userAuth.id
+            });
+        }
         await TargetAllCacheService.markUserStale(userAuth.id)
 
         logger.info('saveDeposit: ' + accumulatedValue + ', user: ' + userAuth.id)
 
-        await Historic.create({
-            valor: accumulatedValue,
-            userId: userAuth.id
-        });
-        
         await Lastupdate.create({
             table: 'targets',
             action: 'all',
