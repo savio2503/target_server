@@ -373,24 +373,30 @@ export default class TargetsController {
 
     public async destroy({ auth, response, params }: HttpContext) {
         try {
-            var target = await Target.query().where('id', params.id)
+            var targets = await Target.query().where('id', params.id)
 
-            var userid = target[0].userId
-
-            if (target.length < 1) {
+            if (targets.length < 1) {
                 return response.notFound();
             }
-            logger.info(`chamou o destroy target ${target[0].id}`)
 
-            var total = await HistoricsController.getTotal(target[0])
+            var target = targets[0]
+            var userid = target.userId
+            logger.info(`chamou o destroy target ${target.id}`)
 
-            await Deposit.query().where('target_id', target[0].id).delete();
+            var total = await HistoricsController.getTotal(target)
 
-            await target[0].delete();
+            await Deposit.query().where('target_id', target.id).delete();
 
-            const userAuth = await auth.getUserOrFail()
+            await target.delete();
 
-            await HistoricsController.processDeposit(total, userAuth.id)
+            const valorTotal = Number(total || 0);
+            if (valorTotal != 0) {
+                logger.info(`Distribuindo os depositos de valor: ${valorTotal}`);
+                const userAuth = await auth.getUserOrFail();
+                await HistoricsController.processDeposit(valorTotal, userAuth.id);
+            } else {
+                logger.info(`target nao possuia depositos`);
+            }
 
             await Lastupdate.create({
                 table: 'targets',
@@ -404,6 +410,7 @@ export default class TargetsController {
 
             return response.ok(`target ${params.id} deleted successfully`);
         } catch (error) {
+            logger.error(`erro ao deletar target ${params.id}: ${error}`)
             return response.badRequest();
         }
     }

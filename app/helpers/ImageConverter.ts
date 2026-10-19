@@ -47,11 +47,9 @@ class ImageConverter {
     static async compressBase64(base64: string): Promise<string> {
         try {
             let pureBase64 = base64;
-            let prefix = '';
-            const match = base64.match(/^data:(image\/[a-zA-Z0-9.+]+);base64,(.+)$/);
+            const match = base64.match(/^data:(?:image\/[a-zA-Z0-9.+]+);base64,(.+)$/);
             if (match) {
-                prefix = `data:${match[1]};base64,`;
-                pureBase64 = match[2];
+                pureBase64 = match[1];
             }
 
             let buffer = Buffer.from(pureBase64, 'base64');
