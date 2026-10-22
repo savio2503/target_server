@@ -53,6 +53,13 @@ export default defineConfig({
     },
   ],
 
+  metaFiles: [
+    {
+      pattern: 'ecosystem.config.cjs',
+      reloadServer: false,
+    },
+  ],
+
   /*
   |--------------------------------------------------------------------------
   | Tests

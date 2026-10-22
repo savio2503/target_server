@@ -1,6 +1,7 @@
 import User from '#models/user'
 import {
     avatarUpdateValidator,
+    cancelRegistrationValidator,
     nameUpdateValidator,
     twoFactorResendValidator,
     twoFactorVerifyValidator,
@@ -29,10 +30,10 @@ function isTwoFactorEnabled(): boolean {
 export default class AuthController {
 
     /**
-     * Passo 1 do login: valida e-mail/senha. Em produção (ou com
-     * TWO_FACTOR_ENABLED=true), envia o código de 2FA e aguarda a
-     * confirmação em `verifyTwoFactor`. Em desenvolvimento, loga
-     * direto (bypass), mantendo o comportamento antigo.
+     * Passo 1 do login: valida e-mail/senha.
+     * Se o usuário ainda não foi verificado (isVerified: false), envia o código de ativação.
+     * Em produção (ou com TWO_FACTOR_ENABLED=true), envia o código de 2FA e aguarda a
+     * confirmação em `verifyTwoFactor`. Em desenvolvimento, loga direto (bypass).
      */
     public async login({ auth, request, response }: HttpContext) {
 
@@ -40,6 +41,16 @@ export default class AuthController {
         const password = request.input('password')
 
         const user = await User.verifyCredentials(email, password)
+
+        // Se o cadastro ainda não foi ativado com o código
+        if (!user.isVerified) {
+            await TwoFactorService.sendCode(user, 'signup')
+
+            return response.ok({
+                message: "codigo_enviado",
+                email: user.email,
+            })
+        }
 
         if (!isTwoFactorEnabled()) {
             await auth.use('web').login(user)
@@ -52,7 +63,7 @@ export default class AuthController {
             })
         }
 
-        await TwoFactorService.sendCode(user)
+        await TwoFactorService.sendCode(user, 'login')
 
         return response.ok({
             message: "codigo_enviado",
@@ -61,8 +72,8 @@ export default class AuthController {
     }
 
     /**
-     * Passo 2 do login: confirma o código de 2FA recebido por e-mail
-     * e, se válido, efetivamente autentica a sessão do usuário.
+     * Passo 2: confirma o código recebido por e-mail (para login ou ativação de cadastro)
+     * e, se válido, autentica a sessão do usuário e ativa o cadastro se pendente.
      */
     public async verifyTwoFactor({ auth, request, response }: HttpContext) {
 
@@ -77,6 +88,11 @@ export default class AuthController {
         const result = await TwoFactorService.verifyCode(user, payload.code)
 
         if (result === 'ok') {
+            if (!user.isVerified) {
+                user.isVerified = true
+                await user.save()
+            }
+
             await auth.use('web').login(user)
 
             return response.ok({
@@ -97,9 +113,8 @@ export default class AuthController {
     }
 
     /**
-     * Reenvia um novo código de 2FA para o e-mail informado.
-     * O controle de "máximo de 3 reenvios / aguardar 5 minutos" é
-     * feito no app; aqui apenas geramos e enviamos um novo código.
+     * Reenvia um novo código de verificação para o e-mail informado.
+     * Se o usuário ainda não confirmou o cadastro, reenvia como 'signup'.
      */
     public async resendTwoFactor({ request, response }: HttpContext) {
 
@@ -111,7 +126,8 @@ export default class AuthController {
             return response.badRequest({ errors: [{ message: 'Usuário não encontrado' }] })
         }
 
-        await TwoFactorService.sendCode(user)
+        const purpose = user.isVerified ? 'login' : 'signup'
+        await TwoFactorService.sendCode(user, purpose)
 
         return response.ok({
             message: "codigo_reenviado",
@@ -171,10 +187,14 @@ export default class AuthController {
                 name: name,
                 avatarUrl: photo,
                 googleUid: googleUid,
-                password: Math.random().toString(36).slice(-8)
+                password: Math.random().toString(36).slice(-8),
+                isVerified: true
             })
         } else if (googleUid && !user.googleUid) {
             user.googleUid = googleUid
+            if (!user.isVerified) {
+                user.isVerified = true
+            }
             await user.save()
         }
 
@@ -187,6 +207,12 @@ export default class AuthController {
 
     }
 
+    /**
+     * Cadastro de usuário:
+     * Salva o usuário no banco com isVerified: false,
+     * dispara o e-mail de ativação de cadastro com o código de 6 dígitos,
+     * e retorna status informando que o código foi enviado.
+     */
     public async signin({request, response}: HttpContext) {
 
         logger.info('signin called')
@@ -194,19 +220,59 @@ export default class AuthController {
         const data = request.all()
         const payload = await userValidator.validate(data)
 
-        //logger.info(`payload: ${JSON.stringify(payload)}`)
-        
-        await User.create({
-            email: payload.email,
-            password: payload.password,
-            name: payload.name,
-            avatarUrl: payload.avatar
+        let user = await User.findBy('email', payload.email)
+
+        if (user) {
+            if (user.isVerified) {
+                return response.badRequest({ errors: [{ message: 'E-mail já cadastrado' }] })
+            }
+            // Conta pendente de ativação: atualiza os dados e reenvia código
+            user.password = payload.password
+            user.name = payload.name ?? user.name
+            user.avatarUrl = payload.avatar ?? user.avatarUrl
+            await user.save()
+        } else {
+            user = await User.create({
+                email: payload.email,
+                password: payload.password,
+                name: payload.name,
+                avatarUrl: payload.avatar,
+                isVerified: false,
+            })
+        }
+
+        await TwoFactorService.sendCode(user, 'signup')
+
+        return response.ok({
+            message: "codigo_enviado",
+            email: user.email,
         })
+    }
 
-        //logger.info(`user created: ${JSON.stringify(user)}`)
+    /**
+     * Cancela o processo de cadastro do usuário.
+     * Segurança: só permite excluir usuários cujo `is_verified` é false.
+     * Se a conta já estiver verificada, recusa a exclusão.
+     */
+    public async cancelRegistration({ request, response }: HttpContext) {
+        const payload = await cancelRegistrationValidator.validate(request.all())
 
-        return response.ok("cadastrado com sucesso");
+        const user = await User.findBy('email', payload.email)
 
+        if (!user) {
+            return response.ok({ message: 'cadastro_cancelado' })
+        }
+
+        if (user.isVerified) {
+            return response.badRequest({
+                errors: [{ message: 'Não é possível cancelar o cadastro de uma conta já verificada.' }],
+            })
+        }
+
+        await user.delete()
+        logger.info(`[Auth] Cadastro cancelado e registro removido para: ${payload.email}`)
+
+        return response.ok({ message: 'cadastro_cancelado' })
     }
 
     public async me({ auth, response }: HttpContext) {

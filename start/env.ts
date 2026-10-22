@@ -88,4 +88,20 @@ export default await Env.create(new URL('../', import.meta.url), {
   */
   CORS_ALLOWED_ORIGINS: Env.schema.string.optional(),
   GOOGLE_CLIENT_ID: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | Armazenamento físico de imagens e instâncias do PM2 Cluster
+  |----------------------------------------------------------
+  */
+  STORAGE_PATH: Env.schema.string.optional(),
+  PM2_INSTANCES: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | URL do serviço de remoção de fundo (remove-bg via uvicorn/FastAPI)
+  | Padrão se omitido: http://127.0.0.1:9000/remove-background
+  |----------------------------------------------------------
+  */
+  REMOVE_BG_URL: Env.schema.string.optional(),
 })

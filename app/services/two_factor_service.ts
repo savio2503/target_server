@@ -28,9 +28,9 @@ export default class TwoFactorService {
 
   /**
    * Gera um novo código, salva o hash no usuário e envia por e-mail.
-   * Usado tanto no primeiro envio (login) quanto no reenvio.
+   * Usado tanto no primeiro envio (login ou cadastro) quanto no reenvio.
    */
-  static async sendCode(user: User): Promise<void> {
+  static async sendCode(user: User, purpose: 'signup' | 'login' = 'login'): Promise<void> {
     const code = this.generateCode()
 
     user.twoFactorCodeHash = this.hashCode(code, user.email)
@@ -42,12 +42,12 @@ export default class TwoFactorService {
     // como enviar o e-mail de verdade: registramos o código no log
     // para permitir testar o fluxo manualmente.
     if (!env.get('SMTP_HOST')) {
-      logger.info(`[2FA] SMTP não configurado. Código para ${user.email}: ${code}`)
+      logger.info(`[2FA] SMTP não configurado. Código (${purpose}) para ${user.email}: ${code}`)
       return
     }
 
     await mail.send(
-      new TwoFactorCodeMail(user.email, user.name, code, this.CODE_EXPIRATION_MINUTES)
+      new TwoFactorCodeMail(user.email, user.name, code, this.CODE_EXPIRATION_MINUTES, purpose)
     )
   }
 

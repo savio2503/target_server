@@ -31,6 +31,9 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare isPremium: boolean
 
+  @column()
+  declare isVerified: boolean
+
   @column({ serializeAs: null })
   declare twoFactorCodeHash: string | null
 

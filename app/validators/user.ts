@@ -28,6 +28,12 @@ export const twoFactorResendValidator = vine.compile(
     })
 )
 
+export const cancelRegistrationValidator = vine.compile(
+    vine.object({
+        email: vine.string().trim().email(),
+    })
+)
+
 export const nameUpdateValidator = vine.compile(
     vine.object({
         name: vine.string().trim().minLength(1),

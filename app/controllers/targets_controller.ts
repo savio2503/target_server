@@ -14,6 +14,7 @@ import { DateTime } from 'luxon';
 import { parseUtcOffsetMinutes } from '../helpers/date_helper.js';
 import Historic from '#models/historic';
 import TargetAllCacheService from '#services/target_all_cache_service'
+import ImageStorageService from '#services/image_storage_service'
 
 export default class TargetsController {
 
@@ -123,9 +124,11 @@ export default class TargetsController {
 
                 imagemBase64 = await ImageConverter.compressBase64(imagemBase64);
 
+                const imageMarker = await ImageStorageService.saveTargetImage(target.id, imagemBase64);
+
                 await ImagemTarget.create({
                     idTarget: target.id,
-                    imagem: imagemBase64
+                    imagem: imageMarker
                 })
 
                 await Lastupdate.create({
@@ -221,17 +224,19 @@ export default class TargetsController {
 
             imagemBase64 = await ImageConverter.compressBase64(imagemBase64);
 
+            const imageMarker = await ImageStorageService.saveTargetImage(target.id, imagemBase64);
+
             if (imagem != null) {
 
                 imagem.merge({
-                    imagem: imagemBase64
+                    imagem: imageMarker
                 })
                 await imagem.save()
             } else {
 
                 await ImagemTarget.create({
                     idTarget: target.id,
-                    imagem: imagemBase64
+                    imagem: imageMarker
                 })
 
             }
@@ -393,6 +398,10 @@ export default class TargetsController {
             var total = await HistoricsController.getTotal(target)
 
             await Deposit.query().where('target_id', target.id).delete();
+
+            // Limpa arquivos físicos de imagem em disco e cache
+            await ImageStorageService.deleteTargetImage(target.id)
+            await ImagemTarget.query().where('idTarget', target.id).delete()
 
             await target.delete();
 

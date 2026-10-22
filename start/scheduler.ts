@@ -16,8 +16,9 @@ import { runPriceCheck } from '#services/price_check_runner'
 import TargetAllCacheService from '#services/target_all_cache_service'
 
 const ENABLED = env.get('PRICE_CHECK_CRON_ENABLED', true)
+const isPrimaryInstance = !process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === '0'
 
-if (ENABLED) {
+if (ENABLED && isPrimaryInstance) {
   let isRunning = false
 
   // Roda a cada 1 hora, no minuto 0 (ex: 13:00, 14:00, 15:00...)
@@ -37,12 +38,16 @@ if (ENABLED) {
     }
   })
 
-  logger.info('[PriceCheck] agendador iniciado (executa a cada 1 hora)')
+  logger.info('[PriceCheck] agendador iniciado (executa a cada 1 hora na instância primária)')
+} else if (!isPrimaryInstance) {
+  logger.info(`[PriceCheck] agendador inativo na instância secundária do cluster (NODE_APP_INSTANCE=${process.env.NODE_APP_INSTANCE})`)
 } else {
   logger.info('[PriceCheck] agendador desativado via PRICE_CHECK_CRON_ENABLED=false')
 }
 
-void TargetAllCacheService.refreshAllUsers()
-  .then(() => logger.info('[TargetAllCache] pesquisa inicial concluída para todos os usuários'))
-  .catch((error) => logger.error(`[TargetAllCache] falha na pesquisa inicial: ${error.message}`))
+if (isPrimaryInstance) {
+  void TargetAllCacheService.refreshAllUsers()
+    .then(() => logger.info('[TargetAllCache] pesquisa inicial concluída para todos os usuários'))
+    .catch((error) => logger.error(`[TargetAllCache] falha na pesquisa inicial: ${error.message}`))
+}
 

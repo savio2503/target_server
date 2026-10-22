@@ -1,9 +1,10 @@
 import ImagemTarget from '#models/imagem_target'
 import Lastupdate from '#models/lastupdate'
 import Target from '#models/target'
+import ImageStorageService from '#services/image_storage_service'
+import RemoveBgService from '#services/remove_bg_service'
 import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
-import sharp from 'sharp'
 
 export default class ImagemTargetsController {
 
@@ -16,7 +17,17 @@ export default class ImagemTargetsController {
                 query.from('targets').select('id').where('user_id', user.id)
             })
 
-        return response.ok(imagens)
+        const resolved = await Promise.all(
+            imagens.map(async (item) => ({
+                id: item.id,
+                idTarget: item.idTarget,
+                imagem: await ImageStorageService.resolveBase64(item.idTarget, item.imagem),
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+            }))
+        )
+
+        return response.ok(resolved)
     }
 
     public async showDetails({ auth, params, response }: HttpContext) {
@@ -55,51 +66,13 @@ export default class ImagemTargetsController {
             return response.notFound({ message: 'Target não encontrado ou não pertence ao usuário' })
         }
 
-        const imagemRecord = await ImagemTarget.query()
-            .where('idTarget', idTarget)
-            .select('imagem')
-            .first()
+        const imagemBase64 = await ImageStorageService.getTargetImage(target.id, tamMax)
 
-        if (!imagemRecord) {
+        if (imagemBase64 === null) {
             return response.notFound({ message: 'Imagem não encontrada para o idTarget fornecido.' })
         }
 
-        let imagemBase64 = imagemRecord.imagem
-
-        if (imagemBase64.toLowerCase().startsWith('http') || imagemBase64.startsWith(' ')) {
-            return response.ok({ imagem: imagemBase64 })
-        }
-
-        const match = imagemBase64.match(/^data:image\/[a-zA-Z0-9.+]+;base64,(.+)$/)
-        if (match) {
-            imagemBase64 = match[1]
-        }
-
-        if (!tamMax) {
-            return response.ok({ imagem: imagemBase64 })
-        }
-
-        try {
-            const parsedTamMax = parseInt(tamMax)
-            const safeTamMax = Math.min(Math.max(parsedTamMax, 16), 2048) // Limite seguro para evitar DoS de memória
-
-            const buffer = Buffer.from(imagemBase64, 'base64')
-            const imagemRedimensionada = await sharp(buffer)
-            .resize({
-                width: safeTamMax,
-                height: safeTamMax,
-                fit: 'inside',
-                withoutEnlargement: true
-            })
-            .toBuffer()
-
-            const imagemRedimensionadaBase64 = imagemRedimensionada.toString('base64')
-            return response.ok({ imagem: imagemRedimensionadaBase64 })
-
-        } catch(error) {
-            console.error('Error ao redimensionar imagem: ', error)
-            return response.status(500).send({message: 'Erro ao processar a imagem.'})
-        }
+        return response.ok({ imagem: imagemBase64 })
     }
 
     public async update({ auth, params, request, response }: HttpContext) {
@@ -118,7 +91,8 @@ export default class ImagemTargetsController {
             return response.notFound({ message: 'Imagem não encontrada para o idTarget fornecido.' })
         }
 
-        targetImagem.imagem = imagem
+        const marker = await ImageStorageService.saveTargetImage(target.id, imagem)
+        targetImagem.imagem = marker
         await targetImagem.save()
         
         await Lastupdate.create({
@@ -130,5 +104,20 @@ export default class ImagemTargetsController {
         })
 
         return response.ok({ message: 'Imagem atualizada com sucesso.', data: targetImagem })
+    }
+
+    public async removeBackground({ response, request }: HttpContext) {
+        const { imagem } = request.only(['imagem'])
+
+        if (!imagem || typeof imagem !== 'string' || imagem.trim() === '') {
+            return response.badRequest({ message: 'O campo imagem é obrigatório.' })
+        }
+
+        try {
+            const resultBase64 = await RemoveBgService.removeBackground(imagem)
+            return response.ok({ imagem: resultBase64 })
+        } catch (error: any) {
+            return response.badRequest({ message: error.message || 'Erro ao processar remoção de fundo.' })
+        }
     }
 }

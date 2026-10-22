@@ -30,6 +30,7 @@ router.get('/', async () => {
 
 router.post('/login', [AuthController, 'login']).use(authRateLimiter)
 router.post('/signin', [AuthController, 'signin']).use(authRateLimiter)
+router.post('/auth/register/cancel', [AuthController, 'cancelRegistration']).use(authRateLimiter)
 router.post('/auth/2fa/verify', [AuthController, 'verifyTwoFactor']).use(twoFactorVerifyRateLimiter)
 router.post('/auth/2fa/resend', [AuthController, 'resendTwoFactor']).use(twoFactorResendRateLimiter)
 router.post('auth/google', [AuthController, 'loginWithGoogle']).use(authRateLimiter)
@@ -56,6 +57,7 @@ router.group(() => {
   router.get('/imagens/:idTarget/details', [ImagemTargetsController, 'showDetails'])
   router.get('/imagens/:idTarget/image', [ImagemTargetsController, 'showImage'])
   router.put('/imagens/:idTarget', [ImagemTargetsController, 'update'])
+  router.post('/imagens/remove-background', [ImagemTargetsController, 'removeBackground'])
 
   router.get('/lastupdates/:date/:utc?', [LastUpdatesController, 'listAfterDate'])
   router.get('/reset/:id', [DepositsController, 'reset'])
