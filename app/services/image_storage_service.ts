@@ -5,9 +5,36 @@ import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import sharp from 'sharp'
 import ImagemTarget from '#models/imagem_target'
+import ImageConverter from '../helpers/ImageConverter.js'
+
+// Configura Sharp para 1 thread por worker do PM2 para evitar disputa de CPU/RAM no Raspberry Pi
+try {
+  sharp.concurrency(1)
+} catch {
+  // Ignora se não for suportado no ambiente
+}
 
 export default class ImageStorageService {
   private static storageBaseDir: string | null = null
+
+  /**
+   * Tamanhos padrões pré-aquecidos de forma síncrona no upload/update
+   */
+  public static readonly PREWARM_SIZES = [100, 200] as const
+
+  private static readonly COMMON_EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg'] as const
+
+  /**
+   * Mapa de promessas em andamento para deduplicação de redimensionamentos simultâneos
+   */
+  private static inFlightResizes = new Map<string, Promise<string | null>>()
+
+  /**
+   * Permite redefinir o diretório base de armazenamento (útil para testes unitários)
+   */
+  public static setStorageDir(dir: string | null): void {
+    this.storageBaseDir = dir
+  }
 
   /**
    * Obtém o diretório raiz de armazenamento de imagens.
@@ -37,8 +64,33 @@ export default class ImageStorageService {
   }
 
   private static async ensureDirs(): Promise<void> {
-    await fs.mkdir(this.getOriginalDir(), { recursive: true })
-    await fs.mkdir(this.getCacheDir(), { recursive: true })
+    try {
+      await fs.mkdir(this.getOriginalDir(), { recursive: true })
+      await fs.mkdir(this.getCacheDir(), { recursive: true })
+    } catch (err: any) {
+      // Fallback resiliente caso STORAGE_PATH seja de outro SO (ex: Linux /home/savio no Mac)
+      const defaultLocal = app.makePath('storage/uploads/targets')
+      if (this.storageBaseDir && this.storageBaseDir !== defaultLocal) {
+        logger.warn(
+          `[ImageStorage] Não foi possível criar diretório configurado em STORAGE_PATH (${this.storageBaseDir}): ${err.message}. Usando fallback local: ${defaultLocal}`
+        )
+        this.storageBaseDir = defaultLocal
+        await fs.mkdir(this.getOriginalDir(), { recursive: true })
+        await fs.mkdir(this.getCacheDir(), { recursive: true })
+        return
+      }
+      throw err
+    }
+  }
+
+  /**
+   * Grava um arquivo no disco de forma atômica (grava em .tmp e depois renomeia)
+   * Previne arquivos de 0-bytes ou corrompidos em caso de leitura concorrente ou crash.
+   */
+  private static async atomicWriteFile(filePath: string, content: string | Buffer): Promise<void> {
+    const tmpPath = `${filePath}.tmp.${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    await fs.writeFile(tmpPath, content)
+    await fs.rename(tmpPath, filePath)
   }
 
   /**
@@ -60,10 +112,22 @@ export default class ImageStorageService {
 
   /**
    * Encontra o arquivo original em disco para um target específico.
+   * Utiliza verificação direta das extensões mais comuns primeiro (O(1)) para evitar readdir caro.
    */
-  private static async findOriginalFile(idTarget: number): Promise<string | null> {
+  public static async findOriginalFile(idTarget: number): Promise<string | null> {
+    const originalDir = this.getOriginalDir()
+
+    // 1. Caminho rápido: checa formatos comuns diretamente sem varrer toda a pasta
+    for (const ext of this.COMMON_EXTENSIONS) {
+      const candidate = path.join(originalDir, `target_${idTarget}.${ext}`)
+      try {
+        await fs.access(candidate)
+        return candidate
+      } catch {}
+    }
+
+    // 2. Fallback: escaneia o diretório se tiver uma extensão incomum
     try {
-      const originalDir = this.getOriginalDir()
       const files = await fs.readdir(originalDir)
       const prefix = `target_${idTarget}.`
       const match = files.find((file) => file.startsWith(prefix))
@@ -74,9 +138,44 @@ export default class ImageStorageService {
   }
 
   /**
+   * Redimensiona um buffer com Sharp e grava no cache em disco de forma atômica.
+   */
+  public static async resizeAndCache(
+    idTarget: number,
+    buffer: Buffer,
+    tamMax: number
+  ): Promise<string> {
+    const safeTamMax = Math.min(Math.max(tamMax, 16), 2048)
+
+    const resizedBuffer = await sharp(buffer)
+      .resize({
+        width: safeTamMax,
+        height: safeTamMax,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .toBuffer()
+
+    const resizedBase64 = resizedBuffer.toString('base64')
+    const cacheFile = path.join(this.getCacheDir(), `target_${idTarget}_s${safeTamMax}.cache`)
+
+    try {
+      await this.atomicWriteFile(cacheFile, resizedBase64)
+    } catch (err: any) {
+      logger.warn(
+        `[ImageStorage] Falha ao gravar cache atômico de imagem ${idTarget} (s${safeTamMax}): ${err.message}`
+      )
+    }
+
+    return resizedBase64
+  }
+
+  /**
    * Salva uma imagem original de target no disco.
-   * Invalida automaticamente qualquer cache redimensionado anterior para o target.
-   * Retorna o marcador a ser persistido no banco de dados (ex: 'disk:target_1.webp' ou URL original).
+   * Suporta dados em Base64 ou URL (que é baixada de forma segura).
+   * Invalida qualquer cache redimensionado anterior para o target.
+   * Pré-aquece de forma síncrona as variantes de cache (100 e 200) para garantir entrega instantânea.
+   * Retorna o marcador a ser persistido no banco de dados (ex: 'disk:target_1.webp').
    */
   public static async saveTargetImage(
     idTarget: number,
@@ -88,28 +187,31 @@ export default class ImageStorageService {
     }
 
     const trimmed = imagemInput.trim()
-    if (trimmed.toLowerCase().startsWith('http://') || trimmed.toLowerCase().startsWith('https://')) {
-      await this.deleteTargetImage(idTarget)
-      return trimmed
+
+    // Se for URL, faz o download seguro via ImageConverter e converte para Base64
+    let base64ToProcess = trimmed
+    if (ImageConverter.isURL(trimmed)) {
+      base64ToProcess = await ImageConverter.convertUrlToBase64(trimmed)
     }
 
     await this.ensureDirs()
 
-    const pureBase64 = this.extractPureBase64(trimmed)
+    const pureBase64 = this.extractPureBase64(base64ToProcess)
     const buffer = Buffer.from(pureBase64, 'base64')
     if (buffer.length === 0) {
       return ' '
     }
 
-    // Detecta formato através dos metadados do sharp
+    // Validação estrita de formato via sharp antes de criar qualquer arquivo físico
     let format = 'webp'
     try {
       const metadata = await sharp(buffer).metadata()
-      if (metadata.format) {
-        format = metadata.format
+      if (!metadata.format) {
+        throw new Error('Formato de imagem não reconhecido.')
       }
-    } catch (err) {
-      logger.warn(`[ImageStorage] Não foi possível ler metadados do target ${idTarget}: ${err.message}`)
+      format = metadata.format
+    } catch (err: any) {
+      throw new Error(`Imagem inválida ou corrompida: ${err.message}`)
     }
 
     // Remove qualquer arquivo original antigo com outra extensão
@@ -120,19 +222,30 @@ export default class ImageStorageService {
 
     const filename = `target_${idTarget}.${format}`
     const targetPath = path.join(this.getOriginalDir(), filename)
-    await fs.writeFile(targetPath, buffer)
+    await this.atomicWriteFile(targetPath, buffer)
 
-    // Invalida cache de variantes redimensionadas
+    // Invalida cache antigo
     await this.clearTargetCache(idTarget)
 
-    logger.info(`[ImageStorage] Imagem do target ${idTarget} salva em disco: ${filename}`)
+    // Pré-aquecimento síncrono para os tamanhos padrão (100 e 200)
+    for (const size of this.PREWARM_SIZES) {
+      try {
+        await this.resizeAndCache(idTarget, buffer, size)
+      } catch (err: any) {
+        logger.warn(
+          `[ImageStorage] Falha ao pré-aquecer cache para target ${idTarget} (s${size}): ${err.message}`
+        )
+      }
+    }
+
+    logger.info(`[ImageStorage] Imagem do target ${idTarget} salva e cache pré-aquecido: ${filename}`)
     return `disk:${filename}`
   }
 
   /**
    * Obtém a imagem do target para resposta na API.
-   * Utiliza cache em disco para versões redimensionadas (tamMax) e migração sob demanda (lazy)
-   * caso a imagem ainda esteja armazenada como Base64 no banco de dados MySQL.
+   * Utiliza cache em disco para versões redimensionadas (tamMax), deduplicação em voo,
+   * e migração sob demanda (lazy) caso a imagem ainda esteja no MySQL.
    */
   public static async getTargetImage(
     idTarget: number,
@@ -161,19 +274,47 @@ export default class ImageStorageService {
       }
     }
 
-    // 2. Busca o buffer original
+    // 2. Se há redimensionamento em voo sendo gerado para este mesmo target e tamanho, aguarda ele
+    if (safeTamMax) {
+      const inflightKey = `${idTarget}_s${safeTamMax}`
+      const existingPromise = this.inFlightResizes.get(inflightKey)
+      if (existingPromise) {
+        return existingPromise
+      }
+
+      const resizePromise = this.executeGetAndResize(idTarget, safeTamMax)
+      this.inFlightResizes.set(inflightKey, resizePromise)
+
+      try {
+        return await resizePromise
+      } finally {
+        this.inFlightResizes.delete(inflightKey)
+      }
+    }
+
+    return this.executeGetAndResize(idTarget, null)
+  }
+
+  /**
+   * Executa a busca do buffer original e opcional redimensionamento
+   */
+  private static async executeGetAndResize(
+    idTarget: number,
+    safeTamMax: number | null
+  ): Promise<string | null> {
+    // 1. Busca o buffer original em disco
     let originalBuffer: Buffer | null = null
     const originalFile = await this.findOriginalFile(idTarget)
 
     if (originalFile) {
       try {
         originalBuffer = await fs.readFile(originalFile)
-      } catch (err) {
+      } catch (err: any) {
         logger.error(`[ImageStorage] Erro ao ler arquivo ${originalFile}: ${err.message}`)
       }
     }
 
-    // 3. Se não achou no disco, busca no MySQL (migração sob demanda / fallback)
+    // 2. Se não achou no disco, busca no MySQL (migração sob demanda / fallback)
     if (!originalBuffer) {
       const record = await ImagemTarget.query().where('idTarget', idTarget).select('id', 'imagem').first()
       if (!record) {
@@ -191,7 +332,9 @@ export default class ImageStorageService {
 
       // Se começa com disk: mas o arquivo não foi achado no disco
       if (dbImagem.startsWith('disk:')) {
-        logger.warn(`[ImageStorage] Registro marcado como disk:${dbImagem} mas não encontrado em disco para target ${idTarget}`)
+        logger.warn(
+          `[ImageStorage] Registro marcado como ${dbImagem} mas não encontrado em disco para target ${idTarget}`
+        )
         return ' '
       }
 
@@ -209,7 +352,7 @@ export default class ImageStorageService {
 
           const filename = `target_${idTarget}.${format}`
           const filePath = path.join(this.getOriginalDir(), filename)
-          await fs.writeFile(filePath, originalBuffer)
+          await this.atomicWriteFile(filePath, originalBuffer)
 
           // Atualiza o banco para desocupar memória do MySQL
           record.imagem = `disk:${filename}`
@@ -218,7 +361,7 @@ export default class ImageStorageService {
         } else {
           return ' '
         }
-      } catch (err) {
+      } catch (err: any) {
         logger.error(`[ImageStorage] Falha ao processar Base64 do banco para target ${idTarget}: ${err.message}`)
         return ' '
       }
@@ -228,31 +371,15 @@ export default class ImageStorageService {
       return ' '
     }
 
-    // 4. Se não precisa de redimensionamento, retorna o Base64 original
+    // 3. Se não precisa de redimensionamento, retorna o Base64 original
     if (!safeTamMax) {
       return originalBuffer.toString('base64')
     }
 
-    // 5. Redimensiona com Sharp e grava no cache em disco
+    // 4. Redimensiona com Sharp e grava no cache atômico
     try {
-      const resizedBuffer = await sharp(originalBuffer)
-        .resize({
-          width: safeTamMax,
-          height: safeTamMax,
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .toBuffer()
-
-      const resizedBase64 = resizedBuffer.toString('base64')
-
-      const cacheFile = path.join(this.getCacheDir(), `target_${idTarget}_s${safeTamMax}.cache`)
-      await fs.writeFile(cacheFile, resizedBase64, 'utf-8').catch((err) => {
-        logger.warn(`[ImageStorage] Falha ao gravar cache de imagem ${idTarget}: ${err.message}`)
-      })
-
-      return resizedBase64
-    } catch (err) {
+      return await this.resizeAndCache(idTarget, originalBuffer, safeTamMax)
+    } catch (err: any) {
       logger.error(`[ImageStorage] Falha no redimensionamento Sharp para target ${idTarget}: ${err.message}`)
       return originalBuffer.toString('base64')
     }
@@ -261,7 +388,10 @@ export default class ImageStorageService {
   /**
    * Resolve o valor para Base64 (usado na listagem index para compatibilidade).
    */
-  public static async resolveBase64(idTarget: number, storedValue: string | null | undefined): Promise<string> {
+  public static async resolveBase64(
+    idTarget: number,
+    storedValue: string | null | undefined
+  ): Promise<string> {
     if (!storedValue || storedValue.trim() === '') return ' '
     if (storedValue.toLowerCase().startsWith('http') || storedValue.startsWith(' ')) {
       return storedValue
@@ -311,6 +441,133 @@ export default class ImageStorageService {
   }
 
   /**
+   * Pré-aquece o cache de um target específico para os tamanhos fornecidos.
+   * Se o arquivo em disco estiver corrompido, limpa o arquivo para evitar erros contínuos.
+   * Se force = false, só gera se o arquivo de cache correspondente não existir.
+   */
+  public static async warmCacheForTarget(
+    idTarget: number,
+    sizes: readonly number[] = this.PREWARM_SIZES,
+    force = false
+  ): Promise<{ targetId: number; generated: number; skipped: number; corrupt: boolean }> {
+    await this.ensureDirs()
+
+    const originalFile = await this.findOriginalFile(idTarget)
+    if (!originalFile) {
+      return { targetId: idTarget, generated: 0, skipped: sizes.length, corrupt: false }
+    }
+
+    const buffer = await fs.readFile(originalFile)
+
+    // Valida integridade do arquivo em disco
+    let isCorrupted = false
+    try {
+      const meta = await sharp(buffer).metadata()
+      if (!meta.format) {
+        isCorrupted = true
+      }
+    } catch {
+      isCorrupted = true
+    }
+
+    if (isCorrupted) {
+      logger.warn(
+        `[ImageStorage] Arquivo corrompido detectado para target ${idTarget} (${originalFile}). Removendo...`
+      )
+      await this.deleteTargetImage(idTarget)
+      return { targetId: idTarget, generated: 0, skipped: 0, corrupt: true }
+    }
+
+    let generated = 0
+    let skipped = 0
+
+    for (const size of sizes) {
+      const cacheFile = path.join(this.getCacheDir(), `target_${idTarget}_s${size}.cache`)
+      if (!force) {
+        try {
+          const stat = await fs.stat(cacheFile)
+          if (stat.size > 0) {
+            skipped++
+            continue
+          }
+        } catch {}
+      }
+
+      await this.resizeAndCache(idTarget, buffer, size)
+      generated++
+    }
+
+    return { targetId: idTarget, generated, skipped, corrupt: false }
+  }
+
+  /**
+   * Varre todas as imagens originais existentes no disco e garante que os caches (100 e 200) estejam gerados.
+   * Detecta e remove arquivos corrompidos automaticamente.
+   */
+  public static async warmAllCaches(
+    sizes: readonly number[] = this.PREWARM_SIZES,
+    force = false,
+    onProgress?: (current: number, total: number, targetId: number, generated: number, corrupt: boolean) => void
+  ): Promise<{
+    total: number
+    warmedTargets: number
+    generatedFiles: number
+    skippedFiles: number
+    corruptCleaned: number
+    errors: number
+  }> {
+    await this.ensureDirs()
+
+    const originalDir = this.getOriginalDir()
+    let files: string[] = []
+    try {
+      files = await fs.readdir(originalDir)
+    } catch {
+      return { total: 0, warmedTargets: 0, generatedFiles: 0, skippedFiles: 0, corruptCleaned: 0, errors: 0 }
+    }
+
+    // Identifica todos os idTargets únicos a partir dos nomes dos arquivos originais (ex: target_123.webp)
+    const targetIds = new Set<number>()
+    for (const file of files) {
+      const match = file.match(/^target_(\d+)\./)
+      if (match) {
+        targetIds.add(parseInt(match[1], 10))
+      }
+    }
+
+    const total = targetIds.size
+    let current = 0
+    let warmedTargets = 0
+    let generatedFiles = 0
+    let skippedFiles = 0
+    let corruptCleaned = 0
+    let errors = 0
+
+    for (const targetId of targetIds) {
+      current++
+      try {
+        const result = await this.warmCacheForTarget(targetId, sizes, force)
+        if (result.corrupt) {
+          corruptCleaned++
+        } else if (result.generated > 0) {
+          warmedTargets++
+          generatedFiles += result.generated
+        }
+        skippedFiles += result.skipped
+
+        if (onProgress) {
+          onProgress(current, total, targetId, result.generated, result.corrupt)
+        }
+      } catch (err: any) {
+        errors++
+        logger.error(`[ImageStorage] Erro ao aquecer cache para target ${targetId}: ${err.message}`)
+      }
+    }
+
+    return { total, warmedTargets, generatedFiles, skippedFiles, corruptCleaned, errors }
+  }
+
+  /**
    * Executa a migração em lote de imagens que ainda estão como Base64 no banco.
    */
   public static async migrateAll(
@@ -338,7 +595,7 @@ export default class ImageStorageService {
         if (onProgress) {
           onProgress(migrated, total, record.idTarget)
         }
-      } catch (err) {
+      } catch (err: any) {
         errors++
         logger.error(`[ImageStorage] Erro ao migrar imagem do target ${record.idTarget}: ${err.message}`)
       }

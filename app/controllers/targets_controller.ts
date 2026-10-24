@@ -110,21 +110,18 @@ export default class TargetsController {
             //logger.info(`criou o target = ${target.id}`)
 
             if (payload.imagem != null) {
-
-                var imagemBase64 = payload.imagem
-
-                if (payload.imagem && ImageConverter.isURL(payload.imagem)) {
-                    try {
-                        imagemBase64 = await ImageConverter.convertUrlToBase64(payload.imagem);
-                    } catch (error) {
-                        logger.info(`erro ao baixar a imagem base64 ${error}`);
-                        imagemBase64 = payload.imagem
-                    }
+                var imagemInput = payload.imagem
+                if (!ImageConverter.isURL(imagemInput)) {
+                    imagemInput = await ImageConverter.compressBase64(imagemInput)
                 }
 
-                imagemBase64 = await ImageConverter.compressBase64(imagemBase64);
-
-                const imageMarker = await ImageStorageService.saveTargetImage(target.id, imagemBase64);
+                let imageMarker: string
+                try {
+                    imageMarker = await ImageStorageService.saveTargetImage(target.id, imagemInput)
+                } catch (error: any) {
+                    logger.error(`Erro ao salvar imagem do target ${target.id}: ${error.message}`)
+                    return response.badRequest({ message: error.message || 'Erro ao processar imagem.' })
+                }
 
                 await ImagemTarget.create({
                     idTarget: target.id,
@@ -211,20 +208,18 @@ export default class TargetsController {
                 .where('idTarget', target.id)
                 .first()
 
-            var imagemBase64 = payload.imagem
-
-            if (payload.imagem && ImageConverter.isURL(payload.imagem)) {
-                try {
-                    imagemBase64 = await ImageConverter.convertUrlToBase64(payload.imagem);
-                } catch (error) {
-                    logger.info(`erro ao baixar a imagem base64 ${error}`);
-                    imagemBase64 = payload.imagem
-                }
+            var imagemInput = payload.imagem
+            if (!ImageConverter.isURL(imagemInput)) {
+                imagemInput = await ImageConverter.compressBase64(imagemInput)
             }
 
-            imagemBase64 = await ImageConverter.compressBase64(imagemBase64);
-
-            const imageMarker = await ImageStorageService.saveTargetImage(target.id, imagemBase64);
+            let imageMarker: string
+            try {
+                imageMarker = await ImageStorageService.saveTargetImage(target.id, imagemInput)
+            } catch (error: any) {
+                logger.error(`Erro ao atualizar imagem do target ${target.id}: ${error.message}`)
+                return response.badRequest({ message: error.message || 'Erro ao processar imagem.' })
+            }
 
             if (imagem != null) {
 
@@ -242,12 +237,12 @@ export default class TargetsController {
             }
 
             await Lastupdate.create({
-                        table: 'imagem',
-                        action: 'update',
-                        detail: target.id.toString(),
-                        dateUpdate: DateTime.now(),
-                        user: target?.userId
-                    })
+                table: 'imagem',
+                action: 'update',
+                detail: target.id.toString(),
+                dateUpdate: DateTime.now(),
+                user: target?.userId
+            })
 
             //logger.info(`update a imagem = ${imagem.id}`)
         } /*else {

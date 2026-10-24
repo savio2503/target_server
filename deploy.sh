@@ -20,6 +20,7 @@ ssh ${PI_USER}@${PI_HOST} << 'EOF'
   cd ~/apps/api-target/build
   npm ci --omit=dev
   node ace migration:run --force
+  node ace images:warm-cache
   pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs
   pm2 save
 EOF

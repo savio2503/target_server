@@ -2,6 +2,7 @@ import ImagemTarget from '#models/imagem_target'
 import Lastupdate from '#models/lastupdate'
 import Target from '#models/target'
 import ImageStorageService from '#services/image_storage_service'
+import TargetAllCacheService from '#services/target_all_cache_service'
 import RemoveBgService from '#services/remove_bg_service'
 import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
@@ -91,7 +92,12 @@ export default class ImagemTargetsController {
             return response.notFound({ message: 'Imagem não encontrada para o idTarget fornecido.' })
         }
 
-        const marker = await ImageStorageService.saveTargetImage(target.id, imagem)
+        let marker: string
+        try {
+            marker = await ImageStorageService.saveTargetImage(target.id, imagem)
+        } catch (error: any) {
+            return response.badRequest({ message: error.message || 'Erro ao processar imagem.' })
+        }
         targetImagem.imagem = marker
         await targetImagem.save()
         
@@ -102,6 +108,8 @@ export default class ImagemTargetsController {
             dateUpdate: DateTime.now(),
             user: user.id
         })
+
+        await TargetAllCacheService.markUserStale(user.id)
 
         return response.ok({ message: 'Imagem atualizada com sucesso.', data: targetImagem })
     }

@@ -8,8 +8,10 @@ class ImageConverter {
    * Verifica se a string é uma URL válida com protocolo http ou https.
    */
   static isURL(str: string): boolean {
+    if (!str || typeof str !== 'string') return false
+    const trimmed = str.trim()
     try {
-      const parsed = new URL(str)
+      const parsed = new URL(trimmed)
       return parsed.protocol === 'http:' || parsed.protocol === 'https:'
     } catch (e) {
       return false
@@ -53,13 +55,15 @@ class ImageConverter {
 
   /**
    * Converte uma URL de imagem para Base64 com proteção rigorosa contra SSRF e DoS.
+   * Utiliza headers de navegador real para evitar bloqueios HTTP 403 (ex: Wikimedia).
    */
   static async convertUrlToBase64(imageUrl: string): Promise<string> {
     if (!this.isURL(imageUrl)) {
       throw new Error('URL de imagem inválida ou protocolo não permitido.')
     }
 
-    const parsedUrl = new URL(imageUrl)
+    const trimmedUrl = imageUrl.trim()
+    const parsedUrl = new URL(trimmedUrl)
 
     // Previne SSRF resolvendo o hostname e validando o IP antes de conectar
     try {
@@ -70,37 +74,67 @@ class ImageConverter {
         }
       }
     } catch (err: any) {
-      throw new Error(`Falha ao resolver host da imagem: ${err.message}`)
+      throw new Error(`Falha ao resolver host da imagem (${parsedUrl.hostname}): ${err.message}`)
     }
 
     try {
-      const response = await axios.get(imageUrl, {
+      const response = await axios.get(trimmedUrl, {
         responseType: 'arraybuffer',
-        timeout: 7000,
-        maxContentLength: 10 * 1024 * 1024, // Limite de 10MB para download
-        maxRedirects: 3,
+        timeout: 10000,
+        maxContentLength: 15 * 1024 * 1024, // Limite de 15MB para download
+        maxRedirects: 5,
         headers: {
-          Accept: 'image/jpeg,image/png,image/webp,image/gif,*/*',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
         },
       })
 
       const contentType = response.headers['content-type']
       if (contentType && !contentType.toLowerCase().startsWith('image/')) {
-        throw new Error('A URL fornecida não retornou um tipo de imagem válido.')
+        throw new Error(`A URL fornecida retornou content-type inválido (${contentType}).`)
       }
 
-      const base64Image = Buffer.from(response.data).toString('base64')
-      return base64Image
+      const buffer = Buffer.from(response.data)
+      if (buffer.length === 0) {
+        throw new Error('A imagem baixada da URL está vazia.')
+      }
+
+      // Validação de integridade: garante que o Sharp consegue ler metadados
+      const metadata = await sharp(buffer).metadata()
+      if (!metadata.format) {
+        throw new Error('O conteúdo baixado não é um formato de imagem reconhecido.')
+      }
+
+      return buffer.toString('base64')
     } catch (error: any) {
-      console.error(`Erro ao converter URL para Base64: ${imageUrl}`, error.message)
-      throw new Error('Não foi possível baixar ou converter a imagem da URL com segurança.')
+      const statusInfo = error.response?.status ? ` (HTTP ${error.response.status})` : ''
+      const detail = error.message || ''
+      console.error(`[ImageConverter] Erro ao baixar URL ${trimmedUrl}${statusInfo}: ${detail}`)
+      throw new Error(
+        `Não foi possível baixar ou validar a imagem da URL fornecida${statusInfo}. Verifique se o link é direto e acessível.`
+      )
     }
   }
 
   /**
-   * Comprime uma imagem base64 usando o sharp.
+   * Comprime uma imagem base64 usando o sharp caso seja maior que 1MB.
+   * Não altera a entrada caso seja URL ou base64 inválido.
    */
   static async compressBase64(base64: string): Promise<string> {
+    if (!base64 || typeof base64 !== 'string') {
+      return base64
+    }
+
+    // Se for URL, preserva a URL intacta
+    if (this.isURL(base64)) {
+      return base64
+    }
+
     try {
       let pureBase64 = base64
       const match = base64.match(/^data:(?:image\/[a-zA-Z0-9.+]+);base64,(.+)$/)
@@ -108,18 +142,29 @@ class ImageConverter {
         pureBase64 = match[1]
       }
 
+      if (pureBase64.length < 50) {
+        return base64
+      }
+
       let buffer = Buffer.from(pureBase64, 'base64')
+
+      // Valida com sharp se é realmente uma imagem suportada antes de tocar nela
+      const metadata = await sharp(buffer).metadata()
+      if (!metadata.format) {
+        return base64
+      }
 
       // Comprime apenas se for maior que 1MB (aproximadamente)
       if (buffer.length > 1024 * 1024) {
         buffer = await sharp(buffer)
           .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
           .toBuffer()
+        return buffer.toString('base64')
       }
 
-      return buffer.toString('base64')
-    } catch (error) {
-      console.error('Erro ao comprimir imagem base64:', error)
+      return base64
+    } catch {
+      // Se não for uma imagem válida ou falhar, mantém a string original sem corrompê-la
       return base64
     }
   }
