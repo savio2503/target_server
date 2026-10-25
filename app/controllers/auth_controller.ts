@@ -22,6 +22,7 @@ const googleOAuthClient = new OAuth2Client()
  * mas pode ser forçado com TWO_FACTOR_ENABLED=true no .env.
  */
 function isTwoFactorEnabled(): boolean {
+    if (env.get('NODE_ENV') === 'development' || !app.inProduction) return false
     const explicit = env.get('TWO_FACTOR_ENABLED')
     if (explicit !== undefined) return explicit
     return app.inProduction
@@ -44,12 +45,17 @@ export default class AuthController {
 
         // Se o cadastro ainda não foi ativado com o código
         if (!user.isVerified) {
-            await TwoFactorService.sendCode(user, 'signup')
+            if (!isTwoFactorEnabled()) {
+                user.isVerified = true
+                await user.save()
+            } else {
+                await TwoFactorService.sendCode(user, 'signup')
 
-            return response.ok({
-                message: "codigo_enviado",
-                email: user.email,
-            })
+                return response.ok({
+                    message: "codigo_enviado",
+                    email: user.email,
+                })
+            }
         }
 
         if (!isTwoFactorEnabled()) {
@@ -230,6 +236,9 @@ export default class AuthController {
             user.password = payload.password
             user.name = payload.name ?? user.name
             user.avatarUrl = payload.avatar ?? user.avatarUrl
+            if (!isTwoFactorEnabled()) {
+                user.isVerified = true
+            }
             await user.save()
         } else {
             user = await User.create({
@@ -237,7 +246,14 @@ export default class AuthController {
                 password: payload.password,
                 name: payload.name,
                 avatarUrl: payload.avatar,
-                isVerified: false,
+                isVerified: !isTwoFactorEnabled(),
+            })
+        }
+
+        if (!isTwoFactorEnabled()) {
+            return response.ok({
+                message: "cadastrado com sucesso",
+                email: user.email,
             })
         }
 

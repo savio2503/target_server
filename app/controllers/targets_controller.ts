@@ -269,7 +269,9 @@ export default class TargetsController {
             "coin": target.coinId,
             //"imagem": target.imagem,
             "removebackground": target.removebackground,
-			"url": target.url,
+            "comprado": target.comprado ? 1 : 0,
+            "url": target.url,
+            "ativo": target.ativo ? 1 : 0,
         })
     }
 

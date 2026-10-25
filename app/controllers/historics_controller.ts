@@ -45,189 +45,229 @@ export default class HistoricsController {
     }
 
     public static async processDeposit(valor: number, userId: number) {
-
-        var somaPosicaoAtivo;
-        let positivovalor = valor >= 0
-
-        if (positivovalor) {
-            somaPosicaoAtivo = (await db
-                .query()
-                .from('targets')
-                .where('user_id', userId)
-                .where('ativo', '1')
-                .sum('posicao', 'soma')).at(0).soma
-        } else {
-            somaPosicaoAtivo = (await db
-                .query()
-                .from('targets')
-                .where('user_id', userId)
-                .where('comprado', '0')
-                .where('ativo', '1')
-                .sum('posicao', 'soma')).at(0).soma
+        if (Math.abs(valor) < 0.001) {
+            return []
         }
 
-        somaPosicaoAtivo = parseInt(somaPosicaoAtivo)
+        const positivovalor = valor >= 0
+        const valorDolar = await HistoricsController.getValorDolar()
+        logger.info(`total: ${valor}`)
 
-        var resposta: Deposit[] = [];
-        var valorResto: number = 0.0;
-        var valorDolar: number = await HistoricsController.getValorDolar();
-
-        let totalsMap = new Map<number, number>();
-        let sums = await db.from('deposits')
+        let totalsMap = new Map<number, number>()
+        let sums = await db
+            .from('deposits')
             .join('targets', 'deposits.target_id', 'targets.id')
             .where('targets.user_id', userId)
             .select('deposits.target_id')
             .sum('deposits.valor as soma')
-            .groupBy('deposits.target_id');
+            .groupBy('deposits.target_id')
 
         for (let s of sums) {
-            totalsMap.set(s.target_id, Number(s.soma));
+            totalsMap.set(Number(s.target_id), Number(s.soma))
         }
 
-        logger.info(`total: ${valor}`)
+        const allocatedMap = new Map<number, number>()
+        const targetsToSave = new Set<Target>()
+        const targetsById = new Map<number, Target>()
+        const resposta: Deposit[] = []
 
-        while (true) {
-            valorResto = 0.0
+        if (positivovalor) {
+            const targets = await Target.query()
+                .where('user_id', userId)
+                .where('comprado', '0')
+                .where('ativo', '1')
 
-            var targets
-            if (positivovalor) {
-                targets = await Target.query()
-                    .where('user_id', userId)
-                    .where('ativo', '1')
-            } else {
-                targets = await Target.query()
-                    .where('user_id', userId)
-                    .where('comprado', '0')
-                    .where('ativo', '1')
+            if (targets.length === 0) {
+                return []
             }
 
-            var depositsToCreate: any[] = []
-            var lastupdatesToCreate: any[] = []
+            for (const t of targets) {
+                targetsById.set(t.id, t)
+                allocatedMap.set(t.id, 0)
+            }
 
-            for (const target of targets) {
+            let remainingValor = valor
 
-                var pesoLocal = target.posicao
-                var aDepositar = ((pesoLocal / somaPosicaoAtivo) * valor)
+            while (remainingValor > 0.005) {
+                const eligibleTargets = targets.filter((t) => {
+                    const goalBrl = t.coinId === 1 ? Number(t.valor) : Number(t.valor) * valorDolar
+                    const currentTotal = (totalsMap.get(t.id) || 0) + (allocatedMap.get(t.id) || 0)
+                    return goalBrl - currentTotal > 0.005
+                })
 
-                var somaDepVal = totalsMap.get(target.id);
-                var somaDep = somaDepVal !== undefined ? somaDepVal : null;
-                //logger.info(`a depositar ${aDepositar}`)
-                logger.info(`------------------------`)
+                if (eligibleTargets.length === 0) {
+                    // Todas as metas ativas atingiram 100%. Distribui o excedente proporcionalmente entre todas as metas ativas.
+                    const totalPesos = targets.reduce((acc, t) => acc + (t.posicao || 1), 0)
+                    for (const target of targets) {
+                        const peso = target.posicao || 1
+                        const share = (peso / totalPesos) * remainingValor
+                        allocatedMap.set(target.id, (allocatedMap.get(target.id) || 0) + share)
+                    }
+                    remainingValor = 0
+                    break
+                }
 
-                if (target.coinId == 1) {
-                    //logger.info(`real`)
-                    if (somaDep == null) {
-                        //logger.info(`if 1 ${aDepositar} / ${target.valor}`)
-                        if (aDepositar >= target.valor) {
-                            logger.info(`if 2`)
-                            var diferenca = aDepositar - target.valor
+                const somaPesos = eligibleTargets.reduce((acc, t) => acc + (t.posicao || 1), 0)
+                let allocatedThisRound = 0
 
-                            aDepositar = target.valor
+                for (const target of eligibleTargets) {
+                    const goalBrl = target.coinId === 1 ? Number(target.valor) : Number(target.valor) * valorDolar
+                    const currentTotal = (totalsMap.get(target.id) || 0) + (allocatedMap.get(target.id) || 0)
+                    const needed = Math.max(0, goalBrl - currentTotal)
 
-                            target.ativo = false
-                            await target.save()
+                    const peso = target.posicao || 1
+                    const share = (peso / somaPesos) * remainingValor
+                    const toAllocate = Math.min(share, needed)
 
-                            targets.pop()
+                    allocatedMap.set(target.id, (allocatedMap.get(target.id) || 0) + toAllocate)
+                    allocatedThisRound += toAllocate
 
-                            valorResto += diferenca
-                        }
-                    } else {
-                        var valorAposODeposito = Number(somaDep) + Number(aDepositar)
-                        //logger.info(`if 3 ${valorAposODeposito} / ${target.valor}`)
-
-                        if (valorAposODeposito >= target.valor) {
-                            logger.info(`if 4`)
-                            var diferenca = valorAposODeposito - target.valor
-                            aDepositar = target.valor - somaDep
-
-                            target.ativo = false
-                            await target.save()
-
-                            valorResto += diferenca
-                        }
-
-                        if (!positivovalor && !target.ativo) {
-                            //logger.info(`voltando para ativo o target: ${target.id}`)
-                            logger.info(`if 5`)
-                            target.ativo = true
-                            await target.save()
-                        }
-                    } 
-                } else {
-                    //logger.info(`dolar`)
-                    var valorConvertido = target.valor * valorDolar
-
-                    if (somaDep == null) {
-                        //logger.info(`if 5 ${aDepositar} / ${valorConvertido}`)
-                        if (aDepositar >= valorConvertido) {
-                            logger.info(`if 6`)
-                            var diferenca = aDepositar - target.valor
-
-                            aDepositar = target.valor
-
-                            target.ativo = false
-                            await target.save()
-
-                            targets.pop()
-
-                            valorResto += diferenca
-                        }
-                    } else {
-                        var valorAposODeposito = Number(somaDep) + Number(aDepositar)
-                        //logger.info(`if 7 ${valorAposODeposito} / ${valorConvertido}`)
-                        if (valorAposODeposito >= valorConvertido) {
-                            logger.info(`if 8`)
-                            var diferenca = valorAposODeposito - target.valor
-                            aDepositar = target.valor - somaDep
-
-                            target.ativo = false
-                            await target.save()
-
-                            valorResto += diferenca
-                        }
-
-                        if (!positivovalor && !target.ativo) {
-                            //logger.info(`voltando para ativo o target: ${target.id}`)
-                            logger.info(`if 9`)
-                            target.ativo = true
-                            await target.save()
-                        }
+                    if (share >= needed - 0.005) {
+                        target.ativo = false
+                        targetsToSave.add(target)
                     }
                 }
 
-                logger.info(`target ${target.descricao}: U$ ${aDepositar}`)
-                
-                totalsMap.set(target.id, (Number(somaDep || 0) + Number(aDepositar)));
-                
-                depositsToCreate.push({
-                    targetId: target.id,
-                    valor: aDepositar
-                });
+                const surplus = remainingValor - allocatedThisRound
+                if (surplus <= 0.005 || allocatedThisRound <= 0.001) {
+                    remainingValor = 0
+                    break
+                }
+                remainingValor = surplus
+            }
 
+            // Ajuste de centavos residuais para garantir total exato
+            let sumAllocated = 0
+            for (const [id, amount] of allocatedMap.entries()) {
+                const rounded = Math.round(amount * 100) / 100
+                allocatedMap.set(id, rounded)
+                sumAllocated += rounded
+            }
+            sumAllocated = Math.round(sumAllocated * 100) / 100
+
+            const diffCents = Math.round((valor - sumAllocated) * 100) / 100
+            if (Math.abs(diffCents) > 0.001) {
+                const primaryTarget = [...targets].sort((a, b) => (b.posicao || 0) - (a.posicao || 0))[0]
+                if (primaryTarget) {
+                    const current = allocatedMap.get(primaryTarget.id) || 0
+                    allocatedMap.set(primaryTarget.id, Math.round((current + diffCents) * 100) / 100)
+                }
+            }
+
+            for (const target of targetsToSave) {
+                await target.save()
+            }
+        } else {
+            // Saque (valor negativo)
+            let remainingWithdraw = Math.abs(valor)
+
+            const targets = await Target.query()
+                .where('user_id', userId)
+                .where('comprado', '0')
+
+            for (const t of targets) {
+                targetsById.set(t.id, t)
+                allocatedMap.set(t.id, 0)
+            }
+
+            while (remainingWithdraw > 0.005) {
+                const eligibleTargets = targets.filter((t) => {
+                    const currentTotal = (totalsMap.get(t.id) || 0) - (allocatedMap.get(t.id) || 0)
+                    return currentTotal > 0.005
+                })
+
+                if (eligibleTargets.length === 0) {
+                    break
+                }
+
+                const somaPesos = eligibleTargets.reduce((acc, t) => acc + (t.posicao || 1), 0)
+                let withdrawnThisRound = 0
+
+                for (const target of eligibleTargets) {
+                    const currentTotal = (totalsMap.get(target.id) || 0) - (allocatedMap.get(target.id) || 0)
+                    const peso = target.posicao || 1
+                    const share = (peso / somaPesos) * remainingWithdraw
+                    const toWithdraw = Math.min(share, currentTotal)
+
+                    allocatedMap.set(target.id, (allocatedMap.get(target.id) || 0) + toWithdraw)
+                    withdrawnThisRound += toWithdraw
+
+                    const goalBrl = target.coinId === 1 ? Number(target.valor) : Number(target.valor) * valorDolar
+                    const afterWithdraw = (totalsMap.get(target.id) || 0) - (allocatedMap.get(target.id) || 0)
+                    if (!target.ativo && afterWithdraw < goalBrl - 0.005) {
+                        target.ativo = true
+                        targetsToSave.add(target)
+                    }
+                }
+
+                const surplus = remainingWithdraw - withdrawnThisRound
+                if (surplus <= 0.005 || withdrawnThisRound <= 0.001) {
+                    remainingWithdraw = 0
+                    break
+                }
+                remainingWithdraw = surplus
+            }
+
+            const targetTotalWithdraw = Math.abs(valor)
+            let sumWithdrawn = 0
+            for (const [id, amount] of allocatedMap.entries()) {
+                const rounded = Math.round(amount * 100) / 100
+                allocatedMap.set(id, rounded)
+                sumWithdrawn += rounded
+            }
+            sumWithdrawn = Math.round(sumWithdrawn * 100) / 100
+
+            const diffCents = Math.round((targetTotalWithdraw - sumWithdrawn) * 100) / 100
+            if (Math.abs(diffCents) > 0.001) {
+                const eligibleTargets = targets.filter(
+                    (t) => (totalsMap.get(t.id) || 0) - (allocatedMap.get(t.id) || 0) >= diffCents
+                )
+                const primaryTarget = eligibleTargets.sort((a, b) => (b.posicao || 0) - (a.posicao || 0))[0]
+                if (primaryTarget) {
+                    const current = allocatedMap.get(primaryTarget.id) || 0
+                    allocatedMap.set(primaryTarget.id, Math.round((current + diffCents) * 100) / 100)
+                }
+            }
+
+            for (const [id, amount] of allocatedMap.entries()) {
+                allocatedMap.set(id, -1 * amount)
+            }
+
+            for (const target of targetsToSave) {
+                await target.save()
+            }
+        }
+
+        const depositsToCreate: any[] = []
+        const lastupdatesToCreate: any[] = []
+
+        for (const [targetId, amount] of allocatedMap.entries()) {
+            if (Math.abs(amount) >= 0.01) {
+                const targetObj = targetsById.get(targetId)
+                logger.info(`target ${targetObj?.descricao || targetId}: U$ ${amount}`)
+                depositsToCreate.push({
+                    targetId: targetId,
+                    valor: amount,
+                })
                 lastupdatesToCreate.push({
                     table: 'targets',
                     action: 'update',
-                    detail: target.id.toString(),
+                    detail: targetId.toString(),
                     dateUpdate: DateTime.now(),
                     user: userId,
-                });
+                })
             }
-
-            if (depositsToCreate.length > 0) {
-                const createdDeposits = await Deposit.createMany(depositsToCreate)
-                resposta.push(...createdDeposits)
-            }
-            if (lastupdatesToCreate.length > 0) {
-                await Lastupdate.createMany(lastupdatesToCreate)
-            }
-
-            logger.info(`------------------------`)
-
-            if (valorResto <= 0.1) {
-                break;
-            }
-            valor = valorResto;
         }
+
+        if (depositsToCreate.length > 0) {
+            const createdDeposits = await Deposit.createMany(depositsToCreate)
+            resposta.push(...createdDeposits)
+        }
+        if (lastupdatesToCreate.length > 0) {
+            await Lastupdate.createMany(lastupdatesToCreate)
+        }
+
+        logger.info(`------------------------`)
 
         await TargetAllCacheService.markUserStale(userId)
         return resposta
