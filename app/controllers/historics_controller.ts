@@ -96,13 +96,8 @@ export default class HistoricsController {
                 })
 
                 if (eligibleTargets.length === 0) {
-                    // Todas as metas ativas atingiram 100%. Distribui o excedente proporcionalmente entre todas as metas ativas.
-                    const totalPesos = targets.reduce((acc, t) => acc + (t.posicao || 1), 0)
-                    for (const target of targets) {
-                        const peso = target.posicao || 1
-                        const share = (peso / totalPesos) * remainingValor
-                        allocatedMap.set(target.id, (allocatedMap.get(target.id) || 0) + share)
-                    }
+                    // Todas as metas ativas atingiram 100%. Ignora o excedente restante.
+                    logger.info(`Todas as metas ativas atingiram 100%. Ignorando excedente de R$ ${remainingValor.toFixed(2)}`)
                     remainingValor = 0
                     break
                 }
@@ -136,7 +131,13 @@ export default class HistoricsController {
                 remainingValor = surplus
             }
 
-            // Ajuste de centavos residuais para garantir total exato
+            // Ajuste de centavos residuais decorrentes de arredondamento
+            let rawAllocatedTotal = 0
+            for (const amount of allocatedMap.values()) {
+                rawAllocatedTotal += amount
+            }
+            const expectedSum = Math.round(rawAllocatedTotal * 100) / 100
+
             let sumAllocated = 0
             for (const [id, amount] of allocatedMap.entries()) {
                 const rounded = Math.round(amount * 100) / 100
@@ -145,12 +146,41 @@ export default class HistoricsController {
             }
             sumAllocated = Math.round(sumAllocated * 100) / 100
 
-            const diffCents = Math.round((valor - sumAllocated) * 100) / 100
+            const diffCents = Math.round((expectedSum - sumAllocated) * 100) / 100
             if (Math.abs(diffCents) > 0.001) {
-                const primaryTarget = [...targets].sort((a, b) => (b.posicao || 0) - (a.posicao || 0))[0]
-                if (primaryTarget) {
-                    const current = allocatedMap.get(primaryTarget.id) || 0
-                    allocatedMap.set(primaryTarget.id, Math.round((current + diffCents) * 100) / 100)
+                const candidateTargets = [...targets]
+                    .filter((t) => {
+                        if (diffCents > 0) {
+                            const goalBrl = t.coinId === 1 ? Number(t.valor) : Number(t.valor) * valorDolar
+                            const totalWithAllocation = (totalsMap.get(t.id) || 0) + (allocatedMap.get(t.id) || 0)
+                            return goalBrl - totalWithAllocation >= diffCents - 0.001
+                        }
+                        return (allocatedMap.get(t.id) || 0) >= Math.abs(diffCents)
+                    })
+                    .sort((a, b) => (b.posicao || 0) - (a.posicao || 0))
+
+                const targetToAdjust = candidateTargets[0]
+                if (targetToAdjust) {
+                    const current = allocatedMap.get(targetToAdjust.id) || 0
+                    allocatedMap.set(targetToAdjust.id, Math.round((current + diffCents) * 100) / 100)
+                }
+            }
+
+            // Garante que nenhuma meta ultrapasse 100% e atualiza status para inativo caso atinja a meta
+            for (const [id, amount] of allocatedMap.entries()) {
+                const target = targetsById.get(id)
+                if (target) {
+                    const goalBrl = target.coinId === 1 ? Number(target.valor) : Number(target.valor) * valorDolar
+                    const currentTotal = totalsMap.get(id) || 0
+                    let finalAmount = amount
+                    if (currentTotal + finalAmount > goalBrl) {
+                        finalAmount = Math.max(0, Math.round((goalBrl - currentTotal) * 100) / 100)
+                        allocatedMap.set(id, finalAmount)
+                    }
+                    if (currentTotal + finalAmount >= goalBrl - 0.005) {
+                        target.ativo = false
+                        targetsToSave.add(target)
+                    }
                 }
             }
 
