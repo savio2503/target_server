@@ -12,16 +12,20 @@ import logger from '@adonisjs/core/services/logger'
 import app from '@adonisjs/core/services/app'
 import env from '#start/env'
 import TwoFactorService from '#services/two_factor_service'
+import TargetAllCacheService from '#services/target_all_cache_service'
+import db from '@adonisjs/lucid/services/db'
 import { OAuth2Client } from 'google-auth-library'
 
 const googleOAuthClient = new OAuth2Client()
 
 /**
- * Em produção o 2FA é sempre exigido. Em desenvolvimento/teste ele
- * fica desligado por padrão (para não depender de SMTP local),
+ * Em produção o 2FA é sempre exigido, EXCETO para contas de teste da revisão da Apple.
+ * Em desenvolvimento/teste ele fica desligado por padrão (para não depender de SMTP local),
  * mas pode ser forçado com TWO_FACTOR_ENABLED=true no .env.
  */
-function isTwoFactorEnabled(): boolean {
+function isTwoFactorEnabled(email?: string): boolean {
+    const reviewerEmail = env.get('APPLE_REVIEW_EMAIL', 'apple.review@target.app')
+    if (email && email.toLowerCase() === reviewerEmail.toLowerCase()) return false
     if (env.get('NODE_ENV') === 'development' || !app.inProduction) return false
     const explicit = env.get('TWO_FACTOR_ENABLED')
     if (explicit !== undefined) return explicit
@@ -45,7 +49,7 @@ export default class AuthController {
 
         // Se o cadastro ainda não foi ativado com o código
         if (!user.isVerified) {
-            if (!isTwoFactorEnabled()) {
+            if (!isTwoFactorEnabled(user.email)) {
                 user.isVerified = true
                 await user.save()
             } else {
@@ -58,7 +62,7 @@ export default class AuthController {
             }
         }
 
-        if (!isTwoFactorEnabled()) {
+        if (!isTwoFactorEnabled(user.email)) {
             await auth.use('web').login(user)
 
             return response.ok({
@@ -362,6 +366,43 @@ export default class AuthController {
         } catch (error) {
             logger.info(`error updateName: ${error}`)
             return response.badRequest({ message: 'Não foi possível atualizar o nome.' })
+        }
+    }
+
+    /**
+     * Exclui permanentemente a conta do usuário e todos os dados associados
+     * (metas, depósitos, imagens, histórico, caches e logs de atualização).
+     * Requisito obrigatório da Apple App Store (Diretriz 5.1.1v).
+     */
+    public async deleteAccount({ auth, response }: HttpContext) {
+        try {
+            const user = await auth.getUserOrFail()
+            const userId = user.id
+
+            await db.transaction(async (trx) => {
+                const userTargets = await trx.from('targets').where('user_id', userId).select('id')
+                const targetIds = userTargets.map((t: { id: number }) => t.id)
+
+                if (targetIds.length > 0) {
+                    await trx.from('deposits').whereIn('target_id', targetIds).delete()
+                    await trx.from('imagem_target').whereIn('id_target', targetIds).delete()
+                    await trx.from('targets').where('user_id', userId).delete()
+                }
+
+                await trx.from('historics').where('user_id', userId).delete()
+                await trx.from('target_all_caches').where('user_id', userId).delete()
+                await trx.from('lastupdates').where('user', userId).delete()
+
+                await user.useTransaction(trx).delete()
+            })
+
+            TargetAllCacheService.clearUser(userId)
+
+            logger.info(`[Auth] Conta e dados excluídos com sucesso para o usuário ID: ${userId}`)
+            return response.ok({ message: 'conta_excluida_com_sucesso' })
+        } catch (error) {
+            logger.error(`[Auth] Erro ao excluir conta: ${error}`)
+            return response.badRequest({ message: 'Não foi possível excluir a conta.' })
         }
     }
 }

@@ -104,4 +104,12 @@ export default await Env.create(new URL('../', import.meta.url), {
   |----------------------------------------------------------
   */
   REMOVE_BG_URL: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
+  | E-mail da conta de testes para a equipe de revisão da Apple.
+  | Usuários que logarem com esse e-mail têm bypass automático de 2FA.
+  |----------------------------------------------------------
+  */
+  APPLE_REVIEW_EMAIL: Env.schema.string.optional(),
 })

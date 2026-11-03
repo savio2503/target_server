@@ -50,6 +50,7 @@ router.group(() => {
   router.post('/user/avatar', [AuthController, 'updateAvatar'])
   router.put('/user/name', [AuthController, 'updateName'])
   router.post('/user/name', [AuthController, 'updateName'])
+  router.delete('/user', [AuthController, 'deleteAccount'])
   router.get('/historic', [HistoricsController, 'get'])
   router.post('/inside', [HistoricsController, 'inside'])
   router.get('/deposit/:id', [DepositsController, 'get'])

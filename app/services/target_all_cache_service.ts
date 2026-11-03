@@ -59,6 +59,18 @@ export default class TargetAllCacheService {
     return true
   }
 
+  static clearUser(userId: number) {
+    this.sinceUsers.delete(userId)
+    const timer = this.refreshTimers.get(userId)
+    if (timer) {
+      clearTimeout(timer)
+      this.refreshTimers.delete(userId)
+    }
+    this.refreshAgain.delete(userId)
+    this.refreshing.delete(userId)
+    this.versions.delete(userId)
+  }
+
   /**
    * Chamado a cada requisição de since. Na primeira vez (ou após expirar), se o
    * cache dos 3 filtros não estiver completo e atualizado, agenda o recálculo em background.
