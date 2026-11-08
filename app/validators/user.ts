@@ -39,3 +39,11 @@ export const nameUpdateValidator = vine.compile(
         name: vine.string().trim().minLength(1),
     })
 )
+
+export const premiumUpdateValidator = vine.compile(
+    vine.object({
+        isPremium: vine.boolean(),
+        productId: vine.string().trim().optional(),
+        transactionId: vine.string().trim().optional(),
+    })
+)

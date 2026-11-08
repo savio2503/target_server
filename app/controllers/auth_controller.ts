@@ -3,6 +3,7 @@ import {
     avatarUpdateValidator,
     cancelRegistrationValidator,
     nameUpdateValidator,
+    premiumUpdateValidator,
     twoFactorResendValidator,
     twoFactorVerifyValidator,
     userValidator,
@@ -366,6 +367,26 @@ export default class AuthController {
         } catch (error) {
             logger.info(`error updateName: ${error}`)
             return response.badRequest({ message: 'Não foi possível atualizar o nome.' })
+        }
+    }
+
+    public async updatePremium({ auth, request, response }: HttpContext) {
+        try {
+            const user = await auth.getUserOrFail()
+            const payload = await premiumUpdateValidator.validate(request.all())
+
+            user.isPremium = payload.isPremium
+            await user.save()
+
+            logger.info(`User ${user.id} premium status updated to ${user.isPremium} (productId: ${payload.productId ?? 'N/A'}, tx: ${payload.transactionId ?? 'N/A'})`)
+
+            return response.ok({
+                message: 'Status premium atualizado com sucesso',
+                isPremium: user.isPremium
+            })
+        } catch (error) {
+            logger.info(`error updatePremium: ${error}`)
+            return response.badRequest({ message: 'Não foi possível atualizar o status premium.' })
         }
     }
 
